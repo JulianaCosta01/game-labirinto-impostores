@@ -10,7 +10,7 @@
 
 Sobreviva em um labirinto hostil enquanto enfrenta inimigos cada vez mais agressivos, coleta power-ups estratégicos e escapa da expansão implacável da Zona Vermelha.
 
-Desenvolvido com foco em arquitetura modular, programação orientada a objetos, gerenciamento de estados, IA para inimigos e sistemas de gameplay escaláveis.
+Desenvolvido com foco em arquitetura modular, programação orientada a objetos, gerenciamento de estados, lógica de comportamento dos NPCs e sistemas de gameplay escaláveis.
 
 <br>
 
