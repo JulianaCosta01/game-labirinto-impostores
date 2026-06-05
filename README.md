@@ -236,7 +236,7 @@ game-impostores-ofc/
 | Desenvolvedor | Responsabilidades |
 |---------------|------------------|
 | Juliana Ferreira Costa | Desenvolvimento, arquitetura, gameplay e documentação |
-| João Amândio | Desenvolvimento, arquitetura e gameplay |
+| João Amândio Avelar do Amaral | Desenvolvimento, arquitetura e gameplay |
 
 ---
 
@@ -260,9 +260,7 @@ O código-fonte pode ser utilizado, modificado e distribuído conforme os termos
 
 <div align="center">
 
-### Desenvolvido por Juliana Ferreira Costa e João Amândio
-
-Projeto desenvolvido para fins acadêmicos e de portfólio.
+### Desenvolvido por Juliana Costa e João Amândio Avelar
 
 ⭐ Se este trabalho foi interessante para você, considere deixar uma estrela no repositório.
 
