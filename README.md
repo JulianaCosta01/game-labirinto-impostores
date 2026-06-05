@@ -14,7 +14,7 @@ Desenvolvido com foco em arquitetura modular, programação orientada a objetos,
 
 <br>
 
-![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Pygame-ce](https://img.shields.io/badge/Pygame--ce-2E8B57?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 ![Portfolio](https://img.shields.io/badge/Portfolio_Project-blue?style=for-the-badge)
@@ -28,7 +28,7 @@ Desenvolvido com foco em arquitetura modular, programação orientada a objetos,
 > - Programação Orientada a Objetos (POO)
 > - Arquitetura Modular
 > - Gerenciamento de Estados
-> - Inteligência Artificial para NPCs
+> - Lógica de comportamento dos NPCs
 > - Sistema de Colisão
 > - Persistência de Dados com JSON
 
@@ -39,7 +39,7 @@ Desenvolvido com foco em arquitetura modular, programação orientada a objetos,
 | Recurso | Descrição |
 |----------|----------|
 | 🎯 **Combate Dinâmico** | Sistema de disparos com mira baseada no mouse |
-| 🤖 **IA dos Inimigos** | Inimigos perseguem o jogador e evoluem ao longo da partida |
+| 🤖 **Movimentação Procedural** | Comportamento autônomo que aumenta a tensão do jogo. |
 | 🔥 **Zona Vermelha** | Área letal que reduz gradualmente o espaço seguro |
 | 💎 **Power-ups Estratégicos** | Habilidades temporárias que alteram a dinâmica do jogo |
 | 🏆 **Sistema de Combo** | Multiplicadores de pontuação por eliminações consecutivas |
@@ -79,7 +79,7 @@ O projeto foi estruturado seguindo princípios de modularização, separação d
 | `main.py` | Inicialização e loop principal |
 | `game_state.py` | Coordenação dos sistemas do jogo |
 | `player.py` | Movimentação, disparos e projéteis |
-| `enemy.py` | IA e comportamento dos inimigos |
+| `enemy.py` | Comportamento dos inimigos |
 | `tilemap.py` | Labirinto e sistema de colisões |
 | `zone.py` | Zona Vermelha e power-ups |
 | `hud.py` | Interface do usuário |
@@ -236,7 +236,7 @@ game-impostores-ofc/
 | Desenvolvedor | Responsabilidades |
 |---------------|------------------|
 | Juliana Ferreira Costa | Desenvolvimento, arquitetura, gameplay e documentação |
-| João Amândio | Desenvolvimento e arquitetura |
+| João Amândio | Desenvolvimento, arquitetura e gameplay |
 
 ---
 
@@ -262,8 +262,8 @@ O código-fonte pode ser utilizado, modificado e distribuído conforme os termos
 
 ### Desenvolvido por Juliana Ferreira Costa e João Amândio
 
-Projeto desenvolvido para fins acadêmicos, educacionais e de portfólio.
+Projeto desenvolvido para fins acadêmicos e de portfólio.
 
-⭐ Se este projeto foi interessante para você, considere deixar uma estrela no repositório.
+⭐ Se este trabalho foi interessante para você, considere deixar uma estrela no repositório.
 
 </div>
