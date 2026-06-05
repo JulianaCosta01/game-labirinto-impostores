@@ -2,67 +2,48 @@
 
 # 🎮 Labirinto dos Impostores
 
-### Sobreviva ao caos. Elimine os impostores. Escape da Zona Vermelha.
+### Jogo 2D de ação e sobrevivência desenvolvido com Python e Pygame-ce
 
 <p align="center">
   <img src="screenshots/gameplay.gif" width="900">
 </p>
 
-Um jogo 2D de ação e sobrevivência desenvolvido em **Python** utilizando **Pygame-ce**, com arquitetura modular orientada a objetos, sistema de IA para inimigos, gerenciamento centralizado de estados, progressão dinâmica de dificuldade e persistência local de recordes.
+Sobreviva em um labirinto hostil enquanto enfrenta inimigos cada vez mais agressivos, coleta power-ups estratégicos e escapa da expansão implacável da Zona Vermelha.
+
+Desenvolvido com foco em arquitetura modular, programação orientada a objetos, gerenciamento de estados, IA para inimigos e sistemas de gameplay escaláveis.
 
 <br>
 
 ![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Pygame-ce](https://img.shields.io/badge/Pygame--ce-2E8B57?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
+![Portfolio](https://img.shields.io/badge/Portfolio_Project-blue?style=for-the-badge)
 
 </div>
 
 ---
 
-# 🚀 Principais Funcionalidades
-
-### Combate Dinâmico
-
-Sistema de disparos rápidos com mira baseada no mouse.
-
-### IA dos Inimigos
-
-Impostores perseguem o jogador e aumentam sua velocidade conforme o progresso da partida.
-
-### Zona Vermelha
-
-Uma ameaça crescente que transforma cada partida em uma corrida contra o tempo.
-
-### Power-ups Estratégicos
-
-Itens especiais que alteram temporariamente as capacidades do jogador.
-
-### Sistema de Combo
-
-Eliminações consecutivas aumentam o multiplicador de pontuação.
-
-### Dificuldade Progressiva
-
-Os inimigos tornam-se mais rápidos a cada nova partida.
+> **Conceitos aplicados**
+>
+> - Programação Orientada a Objetos (POO)
+> - Arquitetura Modular
+> - Gerenciamento de Estados
+> - Inteligência Artificial para NPCs
+> - Sistema de Colisão
+> - Persistência de Dados com JSON
 
 ---
 
-# 🏗️ Arquitetura
+# 🚀 Principais Funcionalidades
 
-O projeto foi desenvolvido com foco em modularização, separação de responsabilidades e organização orientada a objetos.
-
-| Módulo | Responsabilidade |
-|---------|---------|
-| `main.py` | Inicialização e loop principal |
-| `game_state.py` | Gerenciamento central dos sistemas do jogo |
-| `player.py` | Movimentação, disparos e projéteis |
-| `enemy.py` | IA e comportamento dos inimigos |
-| `tilemap.py` | Labirinto e sistema de colisões |
-| `zone.py` | Zona Vermelha e power-ups |
-| `hud.py` | Interface e informações da partida |
-| `menu.py` | Navegação e menu inicial |
+| Recurso | Descrição |
+|----------|----------|
+| 🎯 **Combate Dinâmico** | Sistema de disparos com mira baseada no mouse |
+| 🤖 **IA dos Inimigos** | Inimigos perseguem o jogador e evoluem ao longo da partida |
+| 🔥 **Zona Vermelha** | Área letal que reduz gradualmente o espaço seguro |
+| 💎 **Power-ups Estratégicos** | Habilidades temporárias que alteram a dinâmica do jogo |
+| 🏆 **Sistema de Combo** | Multiplicadores de pontuação por eliminações consecutivas |
+| 📈 **Dificuldade Progressiva** | Desafio crescente a cada nova partida |
 
 ---
 
@@ -80,32 +61,58 @@ O projeto foi desenvolvido com foco em modularização, separação de responsab
 
 ---
 
-# 🎯 Objetivo
+# 🏗️ Arquitetura
 
-Elimine todos os impostores antes que eles ou a Zona Vermelha eliminem você.
+O projeto foi estruturado seguindo princípios de modularização, separação de responsabilidades e reutilização de código, facilitando manutenção, escalabilidade e evolução de novas mecânicas.
+
+### Princípios adotados
+
+- Separação de responsabilidades
+- Modularização
+- Reutilização de código
+- Escalabilidade para novas funcionalidades
+
+### Estrutura dos módulos
+
+| Módulo | Responsabilidade |
+|---------|---------|
+| `main.py` | Inicialização e loop principal |
+| `game_state.py` | Coordenação dos sistemas do jogo |
+| `player.py` | Movimentação, disparos e projéteis |
+| `enemy.py` | IA e comportamento dos inimigos |
+| `tilemap.py` | Labirinto e sistema de colisões |
+| `zone.py` | Zona Vermelha e power-ups |
+| `hud.py` | Interface do usuário |
+| `menu.py` | Navegação e menu inicial |
+
+---
+
+# 🎮 Sobre o Jogo
+
+O objetivo é eliminar todos os impostores antes que eles ou a Zona Vermelha eliminem você.
 
 Durante a partida:
 
 - Encostar em um impostor resulta em derrota.
 - A Zona Vermelha é letal.
 - As paredes bloqueiam o movimento.
-- Quanto mais tempo passa, maior o desafio.
+- O nível de dificuldade aumenta continuamente.
 
 ---
 
-# 🎮 Mecânicas
+# 🎯 Mecânicas de Jogo
 
 ## Zona Vermelha
 
 A Zona Vermelha é ativada quando:
 
-- 30 segundos de partida se passam
+- 30 segundos de partida se passam;
 
-**OU**
+**ou**
 
-- Restam apenas 6 impostores
+- Restam apenas 6 impostores.
 
-Após ativada, ela começa a dominar o mapa progressivamente.
+Após sua ativação, a área segura diminui progressivamente, aumentando a pressão sobre o jogador.
 
 ---
 
@@ -113,22 +120,22 @@ Após ativada, ela começa a dominar o mapa progressivamente.
 
 | Power-up | Efeito |
 |-----------|-----------|
-| SPD | Aumenta a velocidade do jogador |
-| DBL | Disparo duplo |
-| SHD | Invulnerabilidade temporária |
-| FRZ | Congela a expansão da Zona Vermelha |
+| `SPD` | Aumenta a velocidade do jogador |
+| `DBL` | Disparo duplo |
+| `SHD` | Invulnerabilidade temporária |
+| `FRZ` | Congela a expansão da Zona Vermelha |
 
 ---
 
 ## Sistema de Combo
 
-Eliminar inimigos em sequência aumenta o multiplicador de pontos.
+Eliminar inimigos em sequência aumenta o multiplicador de pontuação.
 
 ```text
 x1 → x2 → x3 → ... → x10
 ```
 
-Quanto maior a sequência, maior sua pontuação.
+Quanto maior a sequência, maior a pontuação obtida.
 
 ---
 
@@ -138,7 +145,7 @@ A cada nova partida:
 
 - Os impostores ficam mais rápidos.
 - A pressão aumenta constantemente.
-- O limite de velocidade chega a:
+- A velocidade máxima dos inimigos pode atingir:
 
 ```text
 5.0
@@ -162,16 +169,16 @@ A cada nova partida:
 
 # ⚙️ Instalação
 
-### Pré-requisitos
+### Requisitos
 
-- Python 3.10 ou superior
+- Python 3.10 até 3.12
 - pip
 
-### Clonar o repositório
+### Clonar o projeto
 
 ```bash
 git clone https://github.com/JulianaCosta01/game-labirinto-impostores.git
-cd game-labirinto-impostores
+cd game-impostores-ofc
 ```
 
 ### Instalar dependências
@@ -180,7 +187,7 @@ cd game-labirinto-impostores
 pip install pygame-ce
 ```
 
-### Executar o projeto
+### Executar
 
 ```bash
 python main.py
@@ -194,15 +201,16 @@ python main.py
 |------------|------------|
 | Python | Linguagem principal |
 | Pygame-ce | Framework para desenvolvimento do jogo |
-| JSON | Persistência de recordes locais |
-| Programação Orientada a Objetos | Organização e arquitetura do projeto |
+| JSON | Persistência local de recordes |
+| Git | Controle de versão |
+| GitHub | Hospedagem e versionamento do projeto |
 
 ---
 
 # 📂 Estrutura do Projeto
 
 ```text
-labirinto_impostores/
+game-impostores-ofc/
 │
 ├── main.py
 ├── menu.py
@@ -223,15 +231,38 @@ labirinto_impostores/
 
 ---
 
+# 👥 Autores
+
+| Desenvolvedor | Responsabilidades |
+|---------------|------------------|
+| Juliana Ferreira Costa | Desenvolvimento, arquitetura, gameplay e documentação |
+| João Amândio | Desenvolvimento e arquitetura |
+
+---
+
+# 🎵 Créditos
+
+Músicas, efeitos sonoros e demais recursos de terceiros permanecem sob os direitos de seus respectivos autores e licenciadores.
+
+Todos os recursos foram utilizados de acordo com suas respectivas licenças de uso.
+
+Caso aplicável, os créditos específicos encontram-se junto às respectivas fontes ou arquivos utilizados no projeto.
+
+---
+
 # 📜 Licença
 
-Este projeto está licenciado sob a licença **MIT**.
+Este projeto é distribuído sob a licença **MIT**.
 
-Consulte o arquivo **LICENSE** para mais informações.
+O código-fonte pode ser utilizado, modificado e distribuído conforme os termos descritos no arquivo `LICENSE`.
 
 ---
 
 <div align="center">
+
+### Desenvolvido por Juliana Ferreira Costa e João Amândio
+
+Projeto desenvolvido para fins acadêmicos, educacionais e de portfólio.
 
 ⭐ Se este projeto foi interessante para você, considere deixar uma estrela no repositório.
 
