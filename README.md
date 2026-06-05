@@ -8,14 +8,12 @@
   <img src="screenshots/gameplay.gif" width="900">
 </p>
 
-Um jogo **2D de ação e sobrevivência** desenvolvido com **Python** e **Pygame**, ambientado em um universo cyberpunk neon onde cada segundo importa.
-
-Elimine todos os impostores antes que a **Zona Vermelha** domine completamente o mapa.
+Um jogo 2D de ação e sobrevivência desenvolvido em **Python** utilizando **Pygame-ce**, com arquitetura modular orientada a objetos, sistema de IA para inimigos, gerenciamento centralizado de estados, progressão dinâmica de dificuldade e persistência local de recordes.
 
 <br>
 
 ![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Pygame](https://img.shields.io/badge/Pygame-Game%20Development-2E8B57?style=for-the-badge)
+![Pygame-ce](https://img.shields.io/badge/Pygame--ce-2E8B57?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
 
@@ -23,25 +21,48 @@ Elimine todos os impostores antes que a **Zona Vermelha** domine completamente o
 
 ---
 
-# ✨ Destaques
+# 🚀 Principais Funcionalidades
 
-### ⚡ Combate Dinâmico
+### Combate Dinâmico
+
 Sistema de disparos rápidos com mira baseada no mouse.
 
-### 🤖 IA dos Inimigos
-Impostores perseguem o jogador e aumentam sua velocidade conforme o progresso.
+### IA dos Inimigos
 
-### 🔥 Zona Vermelha
+Impostores perseguem o jogador e aumentam sua velocidade conforme o progresso da partida.
+
+### Zona Vermelha
+
 Uma ameaça crescente que transforma cada partida em uma corrida contra o tempo.
 
-### 💎 Power-ups Estratégicos
-Colete habilidades especiais para aumentar suas chances de sobrevivência.
+### Power-ups Estratégicos
 
-### 🏆 Sistema de Combo
-Eliminações consecutivas aumentam seu multiplicador de pontuação.
+Itens especiais que alteram temporariamente as capacidades do jogador.
 
-### 📈 Dificuldade Progressiva
-Cada nova partida se torna mais desafiadora.
+### Sistema de Combo
+
+Eliminações consecutivas aumentam o multiplicador de pontuação.
+
+### Dificuldade Progressiva
+
+Os inimigos tornam-se mais rápidos a cada nova partida.
+
+---
+
+# 🏗️ Arquitetura
+
+O projeto foi desenvolvido com foco em modularização, separação de responsabilidades e organização orientada a objetos.
+
+| Módulo | Responsabilidade |
+|---------|---------|
+| `main.py` | Inicialização e loop principal |
+| `game_state.py` | Gerenciamento central dos sistemas do jogo |
+| `player.py` | Movimentação, disparos e projéteis |
+| `enemy.py` | IA e comportamento dos inimigos |
+| `tilemap.py` | Labirinto e sistema de colisões |
+| `zone.py` | Zona Vermelha e power-ups |
+| `hud.py` | Interface e informações da partida |
+| `menu.py` | Navegação e menu inicial |
 
 ---
 
@@ -57,13 +78,6 @@ Cada nova partida se torna mais desafiadora.
   <img src="screenshots/print4.png" width="48%">
 </p>
 
-> Sugestão:
->
-> - Print 1 → Menu Inicial
-> - Print 2 → Gameplay
-> - Print 3 → Zona Vermelha
-> - Print 4 → Power-ups / Combo
-
 ---
 
 # 🎯 Objetivo
@@ -72,30 +86,30 @@ Elimine todos os impostores antes que eles ou a Zona Vermelha eliminem você.
 
 Durante a partida:
 
-- 👾 Encostar em um impostor resulta em derrota.
-- 🔥 A Zona Vermelha é letal.
-- 🧱 As paredes bloqueiam o movimento.
-- ⏳ Quanto mais tempo passa, maior o desafio.
+- Encostar em um impostor resulta em derrota.
+- A Zona Vermelha é letal.
+- As paredes bloqueiam o movimento.
+- Quanto mais tempo passa, maior o desafio.
 
 ---
 
 # 🎮 Mecânicas
 
-## 🔥 Zona Vermelha
+## Zona Vermelha
 
 A Zona Vermelha é ativada quando:
 
-- ⏱️ 30 segundos de partida se passam
+- 30 segundos de partida se passam
 
 **OU**
 
-- 👾 Restam apenas 6 impostores
+- Restam apenas 6 impostores
 
 Após ativada, ela começa a dominar o mapa progressivamente.
 
 ---
 
-## 💎 Sistema de Power-ups
+## Sistema de Power-ups
 
 | Power-up | Efeito |
 |-----------|-----------|
@@ -106,7 +120,7 @@ Após ativada, ela começa a dominar o mapa progressivamente.
 
 ---
 
-## 🏆 Sistema de Combo
+## Sistema de Combo
 
 Eliminar inimigos em sequência aumenta o multiplicador de pontos.
 
@@ -118,7 +132,7 @@ Quanto maior a sequência, maior sua pontuação.
 
 ---
 
-## 📈 Dificuldade Progressiva
+## Dificuldade Progressiva
 
 A cada nova partida:
 
@@ -148,25 +162,25 @@ A cada nova partida:
 
 # ⚙️ Instalação
 
-## Clone o repositório
+### Pré-requisitos
+
+- Python 3.10 ou superior
+- pip
+
+### Clonar o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/labirinto-impostores.git
+git clone https://github.com/JulianaCosta01/game-labirinto-impostores.git
+cd game-labirinto-impostores
 ```
 
-## Entre na pasta
+### Instalar dependências
 
 ```bash
-cd labirinto-impostores
+pip install pygame-ce
 ```
 
-## Instale as dependências
-
-```bash
-pip install pygame
-```
-
-## Execute o jogo
+### Executar o projeto
 
 ```bash
 python main.py
@@ -176,12 +190,12 @@ python main.py
 
 # 🛠️ Tecnologias Utilizadas
 
-| Tecnologia | Função |
-|------------|---------|
+| Tecnologia | Utilização |
+|------------|------------|
 | Python | Linguagem principal |
-| Pygame | Desenvolvimento do jogo |
-| JSON | Salvamento de recordes |
-| POO | Estrutura e organização do código |
+| Pygame-ce | Framework para desenvolvimento do jogo |
+| JSON | Persistência de recordes locais |
+| Programação Orientada a Objetos | Organização e arquitetura do projeto |
 
 ---
 
@@ -209,32 +223,6 @@ labirinto_impostores/
 
 ---
 
-# 🚀 Melhorias Implementadas
-
-- ✅ Correção de colisões indevidas com paredes
-- ✅ Reorganização completa da estrutura do projeto
-- ✅ Sistema de Menu independente
-- ✅ Fluxo Menu → Jogo → Menu
-- ✅ Sistema de recordes locais
-- ✅ HUD aprimorada
-- ✅ Sistema de Combo
-- ✅ Power-ups especiais
-- ✅ Dificuldade progressiva
-
----
-
-# 🔮 Melhorias Futuras
-
-- [ ] Novos tipos de impostores
-- [ ] Boss Fights
-- [ ] Sistema de conquistas
-- [ ] Ranking online
-- [ ] Novos mapas
-- [ ] Trilha sonora personalizada
-- [ ] Suporte a Gamepad
-
----
-
 # 📜 Licença
 
 Este projeto está licenciado sob a licença **MIT**.
@@ -245,8 +233,6 @@ Consulte o arquivo **LICENSE** para mais informações.
 
 <div align="center">
 
-### Desenvolvido com ❤️ usando Python e Pygame
-
-⭐ Se gostou do projeto, considere deixar uma estrela no repositório.
+⭐ Se este projeto foi interessante para você, considere deixar uma estrela no repositório.
 
 </div>
