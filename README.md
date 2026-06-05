@@ -48,15 +48,20 @@ Desenvolvido com foco em arquitetura modular, programação orientada a objetos,
 ---
 
 # 📸 Galeria
+### Tela Inicial
 
 <p align="center">
-  <img src="screenshots/print1.png" width="48%">
-  <img src="screenshots/print2.png" width="48%">
+  <img src="tela_inicial.png" width="48%">
 </p>
 
+### Gameplay
 <p align="center">
-  <img src="screenshots/print3.png" width="48%">
-  <img src="screenshots/print4.png" width="48%">
+  <img src="interface_da_partida.png" width="48%">
+</p>
+
+### Zona Vermelha
+<p align="center">
+  <img src="zona_de_perigo.png" width="48%">
 </p>
 
 ---
