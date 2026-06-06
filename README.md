@@ -51,17 +51,17 @@ Desenvolvido com foco em arquitetura modular, programação orientada a objetos,
 ### Tela Inicial
 
 <p align="center">
-  <img src="tela_inicial.png" width="48%">
+  <img src="assets/images/tela_inicial.png" width="48%">
 </p>
 
 ### Gameplay
 <p align="center">
-  <img src="interface_da_partida.png" width="48%">
+  <img src="assets/images/interface_da_partida.png" width="48%">
 </p>
 
 ### Zona Vermelha
 <p align="center">
-  <img src="zona_de_perigo.png" width="48%">
+  <img src="assets/images/zona_de_perigo.png" width="48%">
 </p>
 
 ---
@@ -231,7 +231,7 @@ game-impostores-ofc/
 └── assets/
     ├── images/
     ├── sounds/
-    └── music/
+    |
 ```
 
 ---
