@@ -1,5 +1,5 @@
 # =============================================================================
-# game_state.py — Coordenador Central do Jogo
+# game_state.py (Coordenador Central do Jogo)
 # =============================================================================
 # Função: manipular todos os subsistemas.
 #
