@@ -1,306 +1,340 @@
 # =============================================================================
-# zone.py (Zona Vermelha, Partículas e Itens)
+# zone.py: Zona Vermelha, Partículas e Itens Especiais
 # =============================================================================
+
 
 import pygame
 import math
 import random
 from config import (
-    MAP_W, MAP_H,
-    ZONE_SHRINK_RATE, ZONE_THICKNESS,
-    ZONE_TIME_TRIGGER, ZONE_ENEMY_TRIGGER,
-    ITEM_META, ITEM_COLLECT_RADIUS,
-    C_ZONE_FILL, C_ZONE_EDGE,
+    LARGURA_MAPA, ALTURA_MAPA,
+    VELOCIDADE_ZONA, ESPESSURA_ZONA,
+    TEMPO_ATIVAR_ZONA, INIMIGOS_ATIVAR_ZONA,
+    COR_ZONA_FILL, COR_ZONA_BORDA
 )
-from tilemap import TileMap
+from tilemap import Labirinto
 
-
-'''
-# 1. ZONA VERMELHA
-'''
-
-class Zone:
+class ZonaVermelha:
     """
-    Zona de fechamento que avança dos 4 lados simultaneamente.
+    Gerencia a zona de fechamento que avança pelo mapa.
 
-    'margin' é a espessura atual em pixels.
-    A área segura é o retângulo central: [margin .. MAP_W-margin] x [margin .. MAP_H-margin].
+    Quanto maior a 'margem', menor a área segura.
+    O jogador e inimigos morrem ao entrar na zona.
 
-    Ativação (qualquer condição suficiente):
-      1. Tempo decorrido ≥ ZONE_TIME_TRIGGER
-      2. Inimigos vivos ≤ ZONE_ENEMY_TRIGGER (e > 0)
-
-    Uma vez ativa, a zona nunca retrocede (exceto se freeze ativo).
+    Atributos:
+        margem (float): espessura atual da zona em pixels
+        ativa  (bool) : True quando a zona começa a avançar
+        pulso  (float): fase da animação de pulsação visual
     """
 
     def __init__(self):
-        self.margin = 0.0
-        self.active = False
-        self._pulse = 0.0   # fase da animação de pulsação
+        self.margem = 0.0    # Começa sem zona
+        self.ativa  = False  # Ainda não iniciou o fechamento
+        self.pulso  = 0.0    # Controla a pulsação visual
 
-    def update(self, dt, elapsed_seconds, enemies_alive, freeze_active):
+    def atualizar(self, dt, segundos_decorridos, inimigos_vivos, congelada):
         """
-        Avança a zona e verifica condições de ativação.
+        Atualiza o estado da zona a cada frame.
+
+        CONDIÇÕES DE ATIVAÇÃO (qualquer uma):
+          1. segundos_decorridos >= TEMPO_ATIVAR_ZONA (tempo limite)
+          2. inimigos_vivos > 0 e <= INIMIGOS_ATIVAR_ZONA (poucos inimigos)
 
         Args:
-            dt              (float): delta time em ms
-            elapsed_seconds (float): segundos desde o início da partida
-            enemies_alive   (int)  : inimigos ainda vivos
-            freeze_active   (bool) : True se o power-up Freeze está ativo
+            dt                  (float): delta time em ms
+            segundos_decorridos (float): tempo de partida em segundos
+            inimigos_vivos      (int)  : quantidade de inimigos ainda vivos
+            congelada           (bool) : True se power-up freeze está ativo
         """
-        self._verificar_ativacao(elapsed_seconds, enemies_alive)
+        # Verifica se deve ativar a zona
+        if not self.ativa:
+            cond_tempo    = segundos_decorridos >= TEMPO_ATIVAR_ZONA
+            cond_inimigos = inimigos_vivos > 0 and inimigos_vivos <= INIMIGOS_ATIVAR_ZONA
+            if cond_tempo or cond_inimigos:
+                self.ativa = True
 
-        if self.active and not freeze_active:
-            # Normaliza pela duração real de um frame a 60fps para velocidade constante
-            self.margin += ZONE_SHRINK_RATE * (dt / 16.67)
-            self.margin  = min(self.margin, self._max_margin())
+        # Avança a zona se ativa e não congelada pelo power-up
+        if self.ativa and not congelada:
+            # Normaliza para 60fps: velocidade constante em qualquer computador
+            self.margem += VELOCIDADE_ZONA * (dt / 16.67)
 
-        self._pulse += dt * 0.004
+        # Impede que a zona ultrapasse o centro do mapa
+        margem_maxima = min(LARGURA_MAPA, ALTURA_MAPA) / 2 - 20
+        self.margem   = min(self.margem, margem_maxima)
 
-    def _verificar_ativacao(self, elapsed_seconds, enemies_alive):
-        """Ativa a zona se alguma condição for satisfeita."""
-        if self.active:
-            return
-        por_tempo    = elapsed_seconds >= ZONE_TIME_TRIGGER
-        por_inimigos = 0 < enemies_alive <= ZONE_ENEMY_TRIGGER
-        if por_tempo or por_inimigos:
-            self.active = True
+        # Atualiza fase da animação de pulsação
+        self.pulso += dt * 0.004
 
-    @staticmethod
-    def _max_margin():
-        """Margem máxima antes de a zona cobrir o mapa inteiro."""
-        return min(MAP_W, MAP_H) / 2 - 20
-
-    def draw(self, screen):
+    def desenhar(self, tela):
         """
-        Renderiza as quatro faixas da zona com pulsação de opacidade.
-        A linha interna brilhante marca a "parede da morte".
+        Renderiza a zona como 4 faixas semi-transparentes nas bordas do mapa.
+        A borda interna pulsa em vermelho brilhante — é a "parede da morte".
         """
-        if self.margin < 1:
-            return
+        if self.margem < 1:
+            return   # Zona ainda não existe
 
-        m           = int(self.margin)
-        alpha       = int(180 + 60 * math.sin(self._pulse))
-        zone_surf   = pygame.Surface((MAP_W, MAP_H), pygame.SRCALPHA)
-        cor_pulsada = (*C_ZONE_FILL, alpha)
+        m = int(self.margem)
 
-        # Quatro faixas cobrindo as bordas do mapa
-        pygame.draw.rect(zone_surf, cor_pulsada, (0, 0, MAP_W, m + 8))                    # topo
-        pygame.draw.rect(zone_surf, cor_pulsada, (0, MAP_H - m - 8, MAP_W, m + 8))        # base
-        pygame.draw.rect(zone_surf, cor_pulsada, (0, m, m + 8, MAP_H - m * 2))            # esq
-        pygame.draw.rect(zone_surf, cor_pulsada, (MAP_W - m - 8, m, m + 8, MAP_H - m * 2)) # dir
+        # Opacidade pulsante — a zona "respira" visualmente
+        alpha_pulso = int(180 + 60 * math.sin(self.pulso))
 
-        screen.blit(zone_surf, (0, 0))
-        self._draw_inner_edge(screen, m)
+        # Surface transparente para as faixas vermelhas
+        surf_zona = pygame.Surface((LARGURA_MAPA, ALTURA_MAPA), pygame.SRCALPHA)
 
-    def _draw_inner_edge(self, screen, m):
-        """Linha brilhante na borda interna da zona."""
-        brilho     = int(200 + 55 * math.sin(self._pulse * 1.5))
-        cor_borda  = (255, brilho // 4, brilho // 4)
-        espessura  = max(2, int(3 + 2 * math.sin(self._pulse)))
-        pygame.draw.rect(screen, cor_borda, (m, m, MAP_W - m * 2, MAP_H - m * 2), espessura)
+        # Faixas em cada borda (superior, inferior, esquerda, direita)
+        pygame.draw.rect(surf_zona, (*COR_ZONA_FILL, alpha_pulso),
+                         (0, 0, LARGURA_MAPA, m + 8))                        # Topo
+        pygame.draw.rect(surf_zona, (*COR_ZONA_FILL, alpha_pulso),
+                         (0, ALTURA_MAPA - m - 8, LARGURA_MAPA, m + 8))      # Base
+        pygame.draw.rect(surf_zona, (*COR_ZONA_FILL, alpha_pulso),
+                         (0, m, m + 8, ALTURA_MAPA - m * 2))                 # Esquerda
+        pygame.draw.rect(surf_zona, (*COR_ZONA_FILL, alpha_pulso),
+                         (LARGURA_MAPA - m - 8, m, m + 8, ALTURA_MAPA - m * 2))  # Direita
 
-    def is_player_in_zone(self, px, py, player_size):
+        tela.blit(surf_zona, (0, 0))
+
+        # Linha brilhante na borda interna: indica exatamente onde é perigoso
+        brilho       = int(200 + 55 * math.sin(self.pulso * 1.5))
+        cor_borda    = (255, brilho // 4, brilho // 4)
+        espessura_ln = max(2, int(3 + 2 * math.sin(self.pulso)))
+        pygame.draw.rect(
+            tela, cor_borda,
+            (m, m, LARGURA_MAPA - m * 2, ALTURA_MAPA - m * 2),
+            espessura_ln
+        )
+
+    def jogador_na_zona(self, jog_x, jog_y, jog_tamanho):
         """
-        True se o jogador tocou a zona → game over.
+        Verifica se o jogador tocou a zona vermelha → game over.
 
-        Verifica se algum ponto da borda do jogador ultrapassou a margem.
+        Args:
+            jog_x, jog_y (float): posição do jogador
+            jog_tamanho  (int)  : raio do jogador
+
+        Returns:
+            bool: True se o jogador está na zona
         """
-        if self.margin <= 0:
+        if self.margem <= 0:
             return False
-        r = player_size
+        r = jog_tamanho
         return (
-            px - r < self.margin or px + r > MAP_W - self.margin
-            or py - r < self.margin or py + r > MAP_H - self.margin
+            jog_x - r < self.margem or
+            jog_x + r > LARGURA_MAPA - self.margem or
+            jog_y - r < self.margem or
+            jog_y + r > ALTURA_MAPA  - self.margem
         )
 
     @property
-    def safe_rect(self):
-        """pygame.Rect da área segura atual (usado pelo radar do HUD)."""
-        m = int(self.margin)
-        return pygame.Rect(m, m, MAP_W - m * 2, MAP_H - m * 2)
+    def area_segura(self):
+        """Retorna pygame.Rect da área segura atual (usada pelo radar do HUD)."""
+        m = int(self.margem)
+        return pygame.Rect(m, m, LARGURA_MAPA - m * 2, ALTURA_MAPA - m * 2)
 
-
-'''
-# 2. PARTÍCULA (Efeito visual de curta duração que fica pulsando)
-'''
-
-class Particle:
+# PARTÍCULAS: Efeitos visuais temporário
+class Particula:
     """
-    Ponto colorido que se move, desacelera e desaparece gradualmente.
+    Uma partícula de efeito visual temporário.
 
-    Física simples por frame:
-      posição  += velocidade x fator_dt
-      velocidade *= atrito          (desacelera)
-      vida     -= 0.025 x fator_dt  (fade out)
+    FÍSICA SIMPLES:
+    - posição += velocidade × dt (movimento)
+    - velocidade *= atrito (desaceleração gradual)
+    - vida diminui a cada frame (fade out — some suavemente)
     """
 
-    _ATRITO = 0.92   # fator de desaceleração por frame (0 = para imediatamente, 1 = sem atrito)
+    def __init__(self, x, y, cor, velocidade=None, tamanho=None, vida=None):
+        """
+        Args:
+            x, y       (float): posição inicial em pixels
+            cor        (tuple): cor RGB da partícula
+            velocidade (float): rapidez inicial (aleatória se None)
+            tamanho    (float): raio inicial (aleatório se None)
+            vida       (float): duração (1.0 = padrão, valores maiores duram mais)
+        """
+        self.x   = x
+        self.y   = y
+        self.cor = cor
 
-    def __init__(self, x, y, color, speed=None, size=None, life=None):
-        self.x     = x
-        self.y     = y
-        self.color = color
+        # Direção aleatória — a partícula voa em ângulo aleatório
+        angulo   = random.uniform(0, 2 * math.pi)
+        vel      = velocidade or random.uniform(1.5, 4.0)
+        self.vel_x = math.cos(angulo) * vel
+        self.vel_y = math.sin(angulo) * vel
 
-        angulo  = random.uniform(0, 2 * math.pi)
-        vel     = speed if speed is not None else random.uniform(1.5, 4.0)
-        self.vx = math.cos(angulo) * vel
-        self.vy = math.sin(angulo) * vel
+        self.vida      = vida or 1.0    # 1.0 = cheio, 0.0 = morta
+        self.vida_max  = self.vida
+        self.tamanho   = tamanho or random.uniform(1.5, 3.5)
+        self.atrito    = 0.92           # Fator de desaceleração (< 1 = atrasa)
 
-        self.life     = life if life is not None else 1.0
-        self.max_life = self.life
-        self.size     = size if size is not None else random.uniform(1.5, 3.5)
+    def atualizar(self, dt):
+        """Atualiza posição, velocidade e vida da partícula."""
+        fator       = dt / 16.67        # Normaliza para 60fps
+        self.x     += self.vel_x * fator
+        self.y     += self.vel_y * fator
+        self.vel_x *= self.atrito       # Desacelera gradualmente
+        self.vel_y *= self.atrito
+        self.vida  -= 0.025 * fator     # Vai diminuindo até 0
 
-    def update(self, dt):
-        """Atualiza posição, velocidade e vida."""
-        fator    = dt / 16.67   # normaliza para 60fps
-        self.x  += self.vx * fator
-        self.y  += self.vy * fator
-        self.vx *= self._ATRITO
-        self.vy *= self._ATRITO
-        self.life = max(0.0, self.life - 0.025 * fator)
-
-    def draw(self, screen):
-        """Renderiza com opacidade e tamanho proporcionais à vida restante."""
-        if self.life <= 0:
+    def desenhar(self, tela):
+        """Renderiza com opacidade proporcional à vida restante (fade out)."""
+        if self.vida <= 0:
             return
-        proporcao = self.life / self.max_life
-        alpha     = int(proporcao * 255)
-        raio      = max(1, int(self.size * proporcao))
+        opacidade = int((self.vida / self.vida_max) * 255)
+        raio      = max(1, int(self.tamanho * (self.vida / self.vida_max)))
         surf      = pygame.Surface((raio * 2 + 2, raio * 2 + 2), pygame.SRCALPHA)
-        pygame.draw.circle(surf, (*self.color, alpha), (raio + 1, raio + 1), raio)
-        screen.blit(surf, (int(self.x) - raio - 1, int(self.y) - raio - 1))
+        pygame.draw.circle(surf, (*self.cor, opacidade),
+                           (raio + 1, raio + 1), raio)
+        tela.blit(surf, (int(self.x) - raio - 1, int(self.y) - raio - 1))
 
     @property
-    def is_dead(self):
-        return self.life <= 0
+    def morta(self):
+        """Retorna True se a partícula deve ser removida."""
+        return self.vida <= 0
 
 
-'''
-# 3. FÁBRICAS DE PARTÍCULAS 
-'''
-
-def spawn_kill_particles(x, y, cor_primaria, cor_secundaria):
+def criar_explosao(x, y, cor_primaria, cor_secundaria):
     """
-    Cria burst duplo de partículas ao eliminar um inimigo.
+    Cria uma explosão de partículas ao eliminar um inimigo.
 
-    Camada 1 (anel externo): 16 partículas rápidas e grandes.
-    Camada 2 (brilho residual): 10 partículas lentas e duradouras.
+    Gera duas camadas:
+      1. Partículas rápidas e grandes (anel externo da explosão)
+      2. Partículas lentas e pequenas (brilho residual que some devagar)
+
+    Args:
+        x, y           (float): posição da explosão em pixels
+        cor_primaria   (tuple): cor principal das partículas
+        cor_secundaria (tuple): cor do brilho residual
 
     Returns:
-        list[Particle]
+        list[Particula]: lista com todas as partículas criadas
     """
-    burst = [
-        Particle(x, y, cor_primaria,
-                 speed=random.uniform(2, 5),
-                 size=random.uniform(2, 4))
-        for _ in range(16)
-    ]
-    residuo = [
-        Particle(x, y, cor_secundaria,
-                 speed=random.uniform(0.5, 2),
-                 size=random.uniform(1, 2.5),
-                 life=1.5)
-        for _ in range(10)
-    ]
-    return burst + residuo
+    particulas = []
+
+    # Burst externo: 16 partículas rápidas e grandes
+    for _ in range(16):
+        particulas.append(Particula(
+            x, y, cor_primaria,
+            velocidade=random.uniform(2, 5),
+            tamanho=random.uniform(2, 4)
+        ))
+
+    # Brilho residual: 10 partículas lentas que duram mais
+    for _ in range(10):
+        particulas.append(Particula(
+            x, y, cor_secundaria,
+            velocidade=random.uniform(0.5, 2),
+            tamanho=random.uniform(1, 2.5),
+            vida=1.5
+        ))
+
+    return particulas
 
 
-def spawn_collect_particles(x, y, cor):
+def criar_coleta_item(x, y, cor):
     """
-    Partículas ao coletar um item especial.
+    Cria partículas ao coletar um item especial.
 
     Returns:
-        list[Particle]
+        list[Particula]
     """
     return [
-        Particle(x, y, cor,
-                 speed=random.uniform(1, 3),
-                 size=random.uniform(1.5, 3))
+        Particula(x, y, cor,
+                  velocidade=random.uniform(1, 3),
+                  tamanho=random.uniform(1.5, 3))
         for _ in range(12)
     ]
 
 
-'''
-# 4. ITEM (Power-up coletável)
-'''
-
-class Item:
+# ITEM ESPECIAL: Power-ups coletáveis
+class ItemEspecial:
     """
-    Power-up coletável espalhado pelo mapa.
+    Item especial que o jogador pode coletar ao passar por cima.
 
-    Tipos e efeitos (duração: POWERUP_DURATION ms):
-      "speed"  → velocidade do jogador aumentada (×1.7)
-      "double" → dois projéteis por disparo
-      "shield" → invulnerável a inimigos e zona vermelha
-      "freeze" → paralisa inimigos e congela a zona vermelha
+    Tipos disponíveis:
+        "velocidade" → aumenta velocidade de movimento temporariamente
+        "duplo"      → dispara dois projéteis ao mesmo tempo
+        "escudo"     → protege contra inimigos e zona vermelha
+        "congelar"   → congela o crescimento da zona vermelha
     """
 
-    # Fonte compartilhada entre todos os itens — inicializada na primeira instância
-    _fonte: pygame.font.Font = None
+    # Metadados de cada tipo: cor visual e rótulo exibido na tela
+    TIPOS = {
+        "velocidade": {"cor": (255, 221,  68), "rotulo": "VEL"},
+        "duplo":      {"cor": (255, 107,  53), "rotulo": "DBL"},
+        "escudo":     {"cor": (  0, 212, 255), "rotulo": "ESC"},
+        "congelar":   {"cor": (136, 238, 255), "rotulo": "FRZ"},
+    }
 
-    @classmethod
-    def _get_fonte(cls):
-        """Retorna a fonte do label, criando-a apenas uma vez."""
-        if cls._fonte is None:
-            cls._fonte = pygame.font.SysFont("Courier New", 8, bold=True)
-        return cls._fonte
-
-    def __init__(self, col, row, item_type):
-        self.x, self.y = TileMap.tile_to_pixel_center(col, row)
-        self.type   = item_type
-        self.alive  = True
-        self._pulse = random.uniform(0, math.pi * 2)   # fase individual de animação
-        self.meta   = ITEM_META.get(item_type, ITEM_META["speed"])
-
-    def update(self, dt):
-        """Avança a animação de pulsação."""
-        self._pulse += dt * 0.004
-
-    def check_collect(self, player_x, player_y, player_size):
+    def __init__(self, coluna, linha, tipo):
         """
-        Verifica se o jogador está próximo o suficiente para coletar o item.
+        Args:
+            coluna (int): coluna no mapa
+            linha  (int): linha no mapa
+            tipo   (str): tipo do power-up
+        """
+        self.x, self.y  = Labirinto.tile_para_pixel_centro(coluna, linha)
+        self.tipo       = tipo
+        self.ativo      = True    # False após ser coletado
+        self.pulso      = random.uniform(0, math.pi * 2)   # Fase individual
+        self.meta       = self.TIPOS.get(tipo, self.TIPOS["velocidade"])
+
+    def atualizar(self, dt):
+        """Atualiza a animação de pulsação do item."""
+        self.pulso += dt * 0.004
+
+    def verificar_coleta(self, jog_x, jog_y, jog_tamanho):
+        """
+        Verifica se o jogador passou perto o suficiente para coletar.
 
         Returns:
-            bool: True se coletado (e marca self.alive = False)
+            bool: True se foi coletado agora
         """
-        dx = self.x - player_x
-        dy = self.y - player_y
-        raio_captura = player_size + ITEM_COLLECT_RADIUS
-        if dx * dx + dy * dy < raio_captura * raio_captura:
-            self.alive = False
+        if not self.ativo:
+            return False
+        dx = self.x - jog_x
+        dy = self.y - jog_y
+        raio_coleta = jog_tamanho + 14
+        if dx * dx + dy * dy < raio_coleta * raio_coleta:
+            self.ativo = False
             return True
         return False
 
-    def draw(self, screen):
-        """Renderiza o item de powe- up como losango pulsante com rótulo central."""
-        if not self.alive:
+    def desenhar(self, tela):
+        """
+        Renderiza o item como losango pulsante com rótulo e brilho.
+        """
+        if not self.ativo:
             return
 
-        cor   = self.meta["color"]
-        label = self.meta["label"]
+        cor    = self.meta["cor"]
+        rotulo = self.meta["rotulo"]
         cx, cy = int(self.x), int(self.y)
-        r = int(10 + 2 * math.sin(self._pulse))   # raio que pulsa
+        raio   = int(10 + 2 * math.sin(self.pulso))   # Raio pulsante
 
-        self._draw_item_glow(screen, cx, cy, r, cor)
-        self._draw_diamond(screen, cx, cy, r, cor)
-        self._draw_label(screen, cx, cy, label)
+        # Brilho externo
+        surf_glow = pygame.Surface((raio * 4, raio * 4), pygame.SRCALPHA)
+        pygame.draw.circle(surf_glow, (*cor, 40), (raio * 2, raio * 2), raio * 2)
+        tela.blit(surf_glow, (cx - raio * 2, cy - raio * 2))
 
-    def _draw_item_glow(self, screen, cx, cy, r, cor):
-        """Halo difuso ao redor do item."""
-        glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*cor, 40), (r * 2, r * 2), r * 2)
-        screen.blit(glow, (cx - r * 2, cy - r * 2))
+        # Losango (quadrado rotacionado 45°): usa surface SRCALPHA para suportar alpha
+        losango = [
+            (cx,        cy - raio),
+            (cx + raio, cy       ),
+            (cx,        cy + raio),
+            (cx - raio, cy       ),
+        ]
+        surf_losango = pygame.Surface((raio * 2 + 4, raio * 2 + 4), pygame.SRCALPHA)
+        pontos_locais = [
+            (raio + 2,          2         ),
+            (raio * 2 + 2,      raio + 2  ),
+            (raio + 2,          raio * 2 + 2),
+            (2,                 raio + 2  ),
+        ]
+        pygame.draw.polygon(surf_losango, (*cor, 200), pontos_locais)
+        pygame.draw.polygon(surf_losango, (*cor, 255), pontos_locais, 2)
+        tela.blit(surf_losango, (cx - raio - 2, cy - raio - 2))
 
-    @staticmethod
-    def _draw_diamond(screen, cx, cy, r, cor):
-        """Losango preenchido com borda."""
-        pontos = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
-        pygame.draw.polygon(screen, (*cor, 200), pontos)
-        pygame.draw.polygon(screen, cor, pontos, 2)
-
-    def _draw_label(self, screen, cx, cy, label):
-        """Rótulo de texto centralizado no losango."""
-        fonte     = self._get_fonte()
-        texto     = fonte.render(label, True, (10, 10, 20))
-        screen.blit(texto, (cx - texto.get_width() // 2, cy - texto.get_height() // 2))
+        # Rótulo centralizado no item
+        fonte = pygame.font.SysFont("Courier New", 8, bold=True)
+        texto = fonte.render(rotulo, True, (10, 10, 20))
+        tela.blit(texto, (cx - texto.get_width() // 2,
+                          cy - texto.get_height() // 2))

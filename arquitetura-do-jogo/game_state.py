@@ -1,395 +1,429 @@
 # =============================================================================
-# game_state.py (Coordenador Central do Jogo)
+# game_state.py: Coordenador Central do Jogo
 # =============================================================================
-# Função: manipular todos os subsistemas.
-#
-# O GameState não implementa lógica de física, renderização...
-# ele delega isso a cada classe especializada (Player, Enemy, Zone, etc.) e coordena as interações entre elas (colisões, pontuação, fim de jogo).
 
-
-import json
-import os
 
 import pygame
-
+import math
+import random
+import json
+import os
 from config import (
-    ENEMY_SPAWN_POSITIONS, ITEM_SPAWN_POSITIONS,
-    ENEMY_SPEED_BASE, ENEMY_SPEED_STEP, ENEMY_SPEED_MAX,
-    PLAYER_SPAWN_COL, PLAYER_SPAWN_ROW,
-    SCORE_PER_KILL, COMBO_WINDOW_MS, COMBO_MAX,
-    VICTORY_TIME_BONUS, VICTORY_MAX_TIME,
-    SAVE_FILE,
-    C_ENEMY, C_ENEMY_GLOW,
+    POSICOES_INIMIGOS, POSICOES_ITENS,
+    VELOCIDADE_INIMIGO_BASE, VELOCIDADE_INIMIGO_PASSO, VELOCIDADE_INIMIGO_MAX,
+    PONTOS_POR_KILL, JANELA_COMBO_MS,
+    COR_INIMIGO, COR_BRILHO_INIMIGO,
+    LARGURA_TELA, ALTURA_TELA
 )
-from tilemap    import TileMap
-from player     import Player, Bullet
-from enemy      import Enemy
-from zone       import Zone, Item, spawn_kill_particles, spawn_collect_particles
-from hud        import HUD, draw_end_screen, draw_start_screen
+from tilemap       import Labirinto
+from door      import PortaAutomatica
+from player    import Jogador, Projetil
+from enemy    import Inimigo
+from zone       import ZonaVermelha, Particula, ItemEspecial
+from zone       import criar_explosao, criar_coleta_item
+from hud        import HUD, desenhar_tela_inicial, desenhar_tela_fim
+
+# Arquivo onde o recorde é salvo localmente
+ARQUIVO_SAVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save.json")
 
 
-'''
-# 1. PERSISTÊNCIA — Recorde local
-'''
-
-def _carregar_recorde():
-    """Lê o recorde do arquivo JSON(para o recorde sempre ficar salvo). Retorna 0 se não existir ou corrompido."""
+def carregar_recorde():
+    """
+    Lê o recorde salvo em disco.
+    Retorna 0 se o arquivo não existir ou estiver corrompido.
+    """
     try:
-        with open(SAVE_FILE, "r") as f:
-            return json.load(f).get("high_score", 0)
+        with open(ARQUIVO_SAVE, "r") as f:
+            return json.load(f).get("recorde", 0)
     except (FileNotFoundError, json.JSONDecodeError):
         return 0
 
 
-def _salvar_recorde(pontuacao):
-    """Só atualiza o recorde se o jogador foi melhor do que antes."""
-    if pontuacao > _carregar_recorde():
-        with open(SAVE_FILE, "w") as f:
-            json.dump({"high_score": pontuacao}, f)
-
-'''
-# 2. GAMESTATE
-'''
-
-class GameState:
+def salvar_recorde(pontuacao):
     """
-    Coordenador central: mantém o estado completo de uma partida e
-    cuida da atualização e renderização de todos os subsistemas.
+    Salva o recorde se a pontuação atual for maior que o anterior.
+
+    Args:
+        pontuacao (int): pontuação a verificar e possivelmente salvar
+    """
+    if pontuacao > carregar_recorde():
+        with open(ARQUIVO_SAVE, "w") as f:
+            json.dump({"recorde": pontuacao}, f)
+
+
+class EstadoJogo:
+    """
+    Concentra todo o estado e lógica da partida.
+
+    ESTADOS POSSÍVEIS (self.estado):
+        "inicio"   → tela inicial aguardando ENTER
+        "jogando"  → partida em andamento
+        "fim"      → partida encerrada (vitória ou derrota)
     """
 
     def __init__(self):
-        # Subsistemas persistentes (sobrevivem entre partidas)
-        self.tilemap = TileMap()
-        self.hud     = HUD()
+        self.numero_sessao = 0                    # Conta quantas partidas foram jogadas
+        self.recorde       = carregar_recorde()   # Melhor pontuação já registrada
+        self.estado        = "inicio"             # Estado inicial: tela de espera
 
-        # Recorde e contador de sessões (persistem enquanto o programa roda)
-        self.recorde       = _carregar_recorde()
-        self.num_sessoes   = 0
-        self.state         = "start"
-
-        # Subsistemas de partida (inicializados em new_game() )
-        self.player    = None
-        self.inimigos  = []
-        self.projeteis = []
+        # Subsistemas do jogo (criados/recriados a cada nova partida)
+        self.labirinto  = Labirinto()   # Mapa fixo — criado uma vez só
+        self.hud        = HUD()         # Interface — criada uma vez só
+        self.jogador    = None          # Criado em nova_partida()
+        self.inimigos   = []
+        self.projeteis  = []
         self.particulas = []
-        self.itens     = []
-        self.zone      = None
+        self.itens      = []
+        self.zona       = None
+
+        '''
+        # Portas automáticas do laboratório — fixas no mapa, criadas uma
+        # única vez. Coordenadas (coluna, linha) e orientação conforme o
+        # LAYOUT_MAPA ('D' nas posições linha=8,col=10 e linha=11,col=9).
+        '''
+        self.portas = [
+            PortaAutomatica(coluna=10, linha=8,  orientacao="vertical"),
+            PortaAutomatica(coluna=9,  linha=11, orientacao="horizontal"),
+        ]
 
         # Dados da partida atual
         self.pontuacao      = 0
         self.combo          = 1
-        self._ultimo_kill   = 0    # ms do último kill (controle de combo)
+        self.ms_ultimo_kill = 0     # Timestamp do último inimigo eliminado
         self.total_inimigos = 0
-        self.venceu         = False
-        self._inicio_ms     = 0
+        self.vitoria        = False
+        self.ms_inicio      = 0     # Timestamp de início da partida
 
-    '''
-    # 3. NOVA PARTIDA
-    '''
-
-    def new_game(self):
+    
+    # NOVA PARTIDA
+    def nova_partida(self):
         """
-        Inicializa/ reinicia todos os subsistemas para uma nova partida.
+        Reinicia todos os sistemas para uma nova partida.
 
-        Dificuldade progressiva: a velocidade dos inimigos aumenta
-        ENEMY_SPEED_STEP por sessão, até o máximo ENEMY_SPEED_MAX.
+        DIFICULDADE PROGRESSIVA:
+        A cada sessão a velocidade dos inimigos aumenta em VELOCIDADE_INIMIGO_PASSO,
+        até o máximo de VELOCIDADE_INIMIGO_MAX. Isso torna cada partida
+        progressivamente mais desafiadora.
         """
-        self.num_sessoes += 1
+        self.numero_sessao += 1
 
-        velocidade_inimigos = min(
-            ENEMY_SPEED_BASE + (self.num_sessoes - 1) * ENEMY_SPEED_STEP,
-            ENEMY_SPEED_MAX,
+        # Calcula velocidade dos inimigos desta sessão
+        vel_inimigos = min(
+            VELOCIDADE_INIMIGO_BASE + (self.numero_sessao - 1) * VELOCIDADE_INIMIGO_PASSO,
+            VELOCIDADE_INIMIGO_MAX
         )
 
-        self._resetar_dados_partida()
-        self._criar_entidades(velocidade_inimigos)
+        # Reinicia dados da partida
+        self.pontuacao      = 0
+        self.combo          = 1
+        self.ms_ultimo_kill = 0
+        self.vitoria        = False
 
-        self._inicio_ms = pygame.time.get_ticks()
-        self.state      = "playing"
+        # Jogador começa no canto superior esquerdo (tile 1,1)
+        self.jogador = Jogador(coluna_inicio=1, linha_inicio=1)
 
-    def _resetar_dados_partida(self):
-        """Zera os contadores e flags da partida anterior."""
-        self.pontuacao    = 0
-        self.combo        = 1
-        self._ultimo_kill = 0
-        self.venceu       = False
-
-    def _criar_entidades(self, velocidade_inimigos):
-        """Jogador, inimigos, itens e zona para a nova partida."""
-        self.player = Player(PLAYER_SPAWN_COL, PLAYER_SPAWN_ROW)
-
+        # Cria todos os inimigos nas posições definidas em config.py
         self.inimigos = [
-            Enemy(col=col, row=row, speed=velocidade_inimigos)
-            for (row, col) in ENEMY_SPAWN_POSITIONS
+            Inimigo(coluna=c, linha=l, velocidade=vel_inimigos)
+            for (l, c) in POSICOES_INIMIGOS
         ]
         self.total_inimigos = len(self.inimigos)
 
-        self.itens = [
-            Item(col=col, row=row, item_type=tipo)
-            for (row, col, tipo) in ITEM_SPAWN_POSITIONS
-        ]
-
+        # Reinicia listas de objetos dinâmicos
         self.projeteis  = []
         self.particulas = []
-        self.zone       = Zone()
 
-    '''
-    # 4. TEMPO
-    '''
+        # Cria os itens especiais nas posições definidas
+        self.itens = [
+            ItemEspecial(coluna=c, linha=l, tipo=t)
+            for (l, c, t) in POSICOES_ITENS
+        ]
+
+        # Cria a zona vermelha (começa inativa)
+        self.zona = ZonaVermelha()
+
+        # Reinicia as portas automáticas (começam fechadas)
+        for porta in self.portas:
+            porta.abertura = 0.0
+
+        # Marca o timestamp de início
+        self.ms_inicio = pygame.time.get_ticks()
+
+        self.estado = "jogando"
+
+   
+    # PROPRIEDADES DE TEMPO
+    @property
+    def ms_decorridos(self):
+        """Milissegundos desde o início da partida."""
+        return pygame.time.get_ticks() - self.ms_inicio
 
     @property
-    def elapsed_ms(self):
-        """Milissegundos decorridos desde o início da partida atual."""
-        return pygame.time.get_ticks() - self._inicio_ms
+    def segundos_decorridos(self):
+        """Segundos desde o início da partida (como float)."""
+        return self.ms_decorridos / 1000.0
 
-    @property
-    def elapsed_seconds(self):
-        """Segundos decorridos desde o início da partida atual."""
-        return self.elapsed_ms / 1000.0
-
-    '''
-    # 5. ATUALIZAÇÃO — chamado uma vez por frame
-    '''
-
-    def update(self, dt, keys, mouse_pos, events):
+    
+    # ATUALIZAÇÃO: chamado uma vez por frame
+    def atualizar(self, dt, teclas, pos_mouse, eventos):
         """
-        Processa eventos globais e atualiza toda a lógica do jogo.
+        Atualiza toda a lógica do jogo a cada frame.
 
-        Sequência por frame:
-          1. Eventos de navegação (Enter / ESC)
-          2. Jogador (movimento, mira, disparo)
-          3. Inimigos (automatização de movimento)
-          4. Projéteis (física, expiração por parede)
-          5. Colisões: projétil → inimigo
-          6. Colisão: jogador → inimigo (se sem escudo)
-          7. Colisão: jogador → zona vermelha
-          8. Coleta de itens
-          9. Animações: partículas e itens
-          10. Zona vermelha (crescimento e ativação)
-          11. Verificação de condição de vitória
+        SEQUÊNCIA DE ATUALIZAÇÃO POR FRAME:
+          1. Processa eventos de teclado (Enter, ESC)
+          2. Atualiza o jogador (movimento, mira, disparo)
+          3. Atualiza inimigos (IA, movimento)
+          4. Move todos os projéteis
+          5. Verifica colisões projétil → inimigo
+          6. Verifica colisão jogador → inimigo
+          7. Verifica colisão jogador → zona vermelha
+          8. Verifica coleta de itens especiais
+          9. Atualiza partículas e itens (animação)
+          10. Atualiza a zona vermelha
+          11. Verifica condição de vitória
+
+        Args:
+            dt        (float): delta time em ms
+            teclas    : pygame.key.get_pressed()
+            pos_mouse : (x, y) do cursor do mouse
+            eventos   : lista de pygame.event da fila
         """
-        self._processar_eventos(events)
+        # Eventos de teclado
+        for evento in eventos:
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_RETURN:
+                    if self.estado in ("inicio", "fim"):
+                        self.nova_partida()
+                if evento.key == pygame.K_ESCAPE:
+                    if self.estado == "fim":
+                        self.estado = "inicio"
 
-        if self.state != "playing":
-            return
+        if self.estado != "jogando":
+            return  
 
-        vivos_antes    = self._contar_vivos()
-        freeze_ativo   = self.player.powerups["freeze"] > 0
+        # Jogador 
+        self.jogador.atualizar(teclas, pos_mouse, dt, self.projeteis, self.labirinto)
 
-        self.player.update(keys, mouse_pos, dt, self.projeteis)
+        # Inimigos 
+        inimigos_vivos = sum(1 for e in self.inimigos if e.vivo)
+        congelado      = self.jogador.powerups["congelar"] > 0
 
         for inimigo in self.inimigos:
-            inimigo.update(dt, self.zone.margin, freeze_ativo)
+            inimigo.atualizar(dt, self.zona.margem, congelado, self.labirinto)
 
-        for projetil in self.projeteis:
-            projetil.update()
-        self.projeteis = [p for p in self.projeteis if p.alive]
+        # Projéteis 
+        for proj in self.projeteis:
+            proj.atualizar()
+        self.projeteis = [p for p in self.projeteis if p.ativo]
 
-        self._verificar_colisoes_projetil_inimigo()
+        # Colisão projétil → inimigo 
+        self._checar_colisoes_projetil_inimigo()
 
-        if not self.player.has_shield:
-            self._verificar_colisao_jogador_inimigo()
+        # Colisão jogador → inimigo (sem escudo)
+        if not self.jogador.tem_escudo:
+            self._checar_colisao_jogador_inimigo()
 
-        if self.player.alive:
-            self._verificar_colisao_jogador_zona()
+        # Colisão jogador → zona vermelha 
+        if self.jogador.vivo:
+            self._checar_colisao_jogador_zona()
 
-        self._verificar_coleta_itens()
+        # Coleta de itens especiais
+        self._checar_coleta_itens()
 
+        # Itens e partículas (animação) 
         for item in self.itens:
-            item.update(dt)
-        self.particulas = [p for p in self.particulas if not p.is_dead]
+            item.atualizar(dt)
         for p in self.particulas:
-            p.update(dt)
+            p.atualizar(dt)
+        self.particulas = [p for p in self.particulas if not p.morta]
 
-        # Usa a contagem APÓS a atualização dos inimigos
-        vivos_depois = self._contar_vivos()
-        self.zone.update(dt, self.elapsed_seconds, vivos_depois, freeze_ativo)
+        # Portas automáticas
+        # Abrem quando o jogador ou algum inimigo vivo está próximo.
+        posicoes_entidades = [(self.jogador.x, self.jogador.y)]
+        for inimigo in self.inimigos:
+            if inimigo.vivo:
+                posicoes_entidades.append((inimigo.x, inimigo.y))
+        for porta in self.portas:
+            porta.atualizar(posicoes_entidades)
 
-        if vivos_depois == 0 and self.player.alive:
+        # Zona vermelha
+        self.zona.atualizar(dt, self.segundos_decorridos, inimigos_vivos, congelado)
+
+        # Condição de vitória 
+        if all(not e.vivo for e in self.inimigos) and self.jogador.vivo:
             self._acionar_vitoria()
 
-    def _processar_eventos(self, events):
-        """Trata eventos de navegação entre telas."""
-        for event in events:
-            if event.type != pygame.KEYDOWN:
-                continue
-            if event.key == pygame.K_RETURN and self.state in ("start", "end"):
-                self.new_game()
-            if event.key == pygame.K_ESCAPE and self.state == "end":
-                self.state = "start"
-
-    def _contar_vivos(self):
-        """Retorna o número de inimigos ainda vivos."""
-        return sum(1 for e in self.inimigos if e.alive)
-
-    '''
-    # 6. COLISÕES
-    '''
-
-    def _verificar_colisoes_projetil_inimigo(self):
+   
+    # VERIFICAÇÕES DE COLISÃO
+    def _checar_colisoes_projetil_inimigo(self):
         """
-        Detecta acertos de projéteis em inimigos.
+        Verifica colisão entre todos os projéteis e todos os inimigos.
 
-        Ao acertar: projétil e inimigo são marcados como mortos,
-        a pontuação é atualizada com o multiplicador de combo,
-        e partículas de explosão são geradas.
+        ALGORITMO O(n × m): para cada projétil, verifica contra cada inimigo.
+        Suficientemente eficiente para o tamanho deste jogo.
+
+        Ao acertar:
+          - Projétil e inimigo são desativados
+          - Incrementa contadores de hit e pontuação
+          - Atualiza o combo
+          - Gera partículas de explosão
         """
-        for projetil in self.projeteis:
-            if not projetil.alive:
+        for proj in self.projeteis:
+            if not proj.ativo:
                 continue
             for inimigo in self.inimigos:
-                if not inimigo.alive:
+                if not inimigo.vivo:
                     continue
-                if inimigo.collides_with_bullet(projetil.x, projetil.y):
-                    self._registrar_acerto(projetil, inimigo)
-                    break   # um projétil elimina no máximo um inimigo
+                if inimigo.colide_com_projetil(proj.x, proj.y):
+                    # Projétil acertou!
+                    proj.ativo = False
+                    inimigo.acertar()
+                    self.jogador.acertos += 1
 
-    def _registrar_acerto(self, projetil, inimigo):
-        """Processa as consequências de um projétil acertar um inimigo."""
-        projetil.alive = False
-        inimigo.hit()
-        self.player.hits += 1
-        self._atualizar_combo_e_pontuacao()
-        self.particulas.extend(
-            spawn_kill_particles(inimigo.x, inimigo.y, C_ENEMY, C_ENEMY_GLOW)
-        )
+                    # Atualiza combo: kills consecutivos dentro de JANELA_COMBO_MS
+                    agora = pygame.time.get_ticks()
+                    if agora - self.ms_ultimo_kill < JANELA_COMBO_MS:
+                        self.combo = min(self.combo + 1, 10)
+                    else:
+                        self.combo = 1
+                    self.ms_ultimo_kill = agora
 
-    def _atualizar_combo_e_pontuacao(self):
-        """Incrementa o combo SE estiver dentro da janela de tempo, SENÃO reseta."""
-        agora = pygame.time.get_ticks()
-        if agora - self._ultimo_kill < COMBO_WINDOW_MS:
-            self.combo = min(self.combo + 1, COMBO_MAX)
-        else:
-            self.combo = 1
-        self._ultimo_kill = agora
-        self.pontuacao   += SCORE_PER_KILL * self.combo
+                    # Pontuação com multiplicador de combo
+                    self.pontuacao += PONTOS_POR_KILL * self.combo
 
-    def _verificar_colisao_jogador_inimigo(self):
-        """Derrota por contato com inimigo (SEM escudo ativo)."""
-        if not self.player.alive:
+                    # Cria explosão de partículas no local do inimigo
+                    self.particulas.extend(
+                        criar_explosao(inimigo.x, inimigo.y,
+                                       COR_INIMIGO, COR_BRILHO_INIMIGO)
+                    )
+                    break   # Um projétil acerta apenas um inimigo
+
+    def _checar_colisao_jogador_inimigo(self):
+        """
+        Verifica se o jogador tocou algum inimigo vivo.
+        Sem escudo → game over imediato.
+        """
+        if not self.jogador.vivo:
             return
         for inimigo in self.inimigos:
-            if inimigo.alive and inimigo.collides_with_player(
-                self.player.x, self.player.y, self.player.size
-            ):
-                self._acionar_derrota()
+            if not inimigo.vivo:
+                continue
+            if inimigo.colide_com_jogador(
+                    self.jogador.x, self.jogador.y, self.jogador.tamanho):
+                self._acionar_derrota("impostor")
                 return
 
-    def _verificar_colisao_jogador_zona(self):
-        """Derrota por contato com a zona vermelha."""
-        if not self.player.alive:
+    def _checar_colisao_jogador_zona(self):
+        """Verifica se o jogador entrou na zona vermelha → game over."""
+        if not self.jogador.vivo:
             return
-        if self.zone.is_player_in_zone(self.player.x, self.player.y, self.player.size):
-            self._acionar_derrota()
+        if self.zona.jogador_na_zona(
+                self.jogador.x, self.jogador.y, self.jogador.tamanho):
+            self._acionar_derrota("zona")
 
-    def _verificar_coleta_itens(self):
-        """Coleta power-ups e gera partículas de confirmação."""
+    def _checar_coleta_itens(self):
+        """Verifica se o jogador coletou algum item especial."""
         for item in self.itens:
-            if item.alive and item.check_collect(
-                self.player.x, self.player.y, self.player.size
-            ):
-                self.player.activate_powerup(item.type)
+            if not item.ativo:
+                continue
+            if item.verificar_coleta(
+                    self.jogador.x, self.jogador.y, self.jogador.tamanho):
+                # Ativa o power-up correspondente no jogador
+                self.jogador.ativar_powerup(item.tipo)
+                # Cria partículas de coleta
                 self.particulas.extend(
-                    spawn_collect_particles(item.x, item.y, item.meta["color"])
+                    criar_coleta_item(item.x, item.y, item.meta["cor"])
                 )
 
-    '''
-    # 7. FIM DE JOGO
-    '''
-
-    def _acionar_derrota(self):
+ 
+    # FIM DE PARTIDA
+    def _acionar_derrota(self, motivo=""):
         """Encerra a partida por derrota."""
-        self.player.alive = False
-        self.venceu       = False
-        self._finalizar_partida()
+        self.jogador.vivo = False
+        self.vitoria      = False
+        self._finalizar()
 
     def _acionar_vitoria(self):
-        """Encerra a partida por vitória e aplica bônus de tempo."""
-        self.venceu     = True
-        tempo_restante  = max(0.0, VICTORY_MAX_TIME - self.elapsed_seconds)
-        self.pontuacao += int(tempo_restante * VICTORY_TIME_BONUS)
-        self._finalizar_partida()
+        """
+        Encerra a partida por vitória.
+        Adiciona bônus de tempo: completar mais rápido = mais pontos.
+        """
+        self.vitoria = True
 
-    def _finalizar_partida(self):
-        """Procedimentos comuns ao encerrar a partida (vitória ou derrota)."""
-        _salvar_recorde(self.pontuacao)
-        self.recorde = _carregar_recorde()
+        # Bônus de tempo: 10 pontos por segundo abaixo do tempo esperado (120s)
+        tempo_esperado = 120.0
+        tempo_restante = max(0, tempo_esperado - self.segundos_decorridos)
+        self.pontuacao += int(tempo_restante * 10)
+
+        self._finalizar()
+
+    def _finalizar(self):
+        """Procedimentos comuns ao encerrar (vitória ou derrota)."""
+        salvar_recorde(self.pontuacao)
+        self.recorde = carregar_recorde()
         self.combo   = 1
-        self.state   = "end"
+        self.estado  = "fim"
 
-    '''
-    # 8. RENDERIZAÇÃO: chamado após update()
-    '''
-
-    def draw(self, screen):
+    
+    # RENDERIZAÇÃO
+    def desenhar(self, tela):
         """
-        Renderiza todos os elementos na ordem correta (painter's algorithm).
+        Renderiza todo o estado visual do jogo.
 
-        Ordem (de trás para frente):
-          1. Labirinto       (camada base estática)
-          2. Itens           (no chão)
-          3. Inimigos        (entidades)
-          4. Projéteis       (sobre as entidades)
-          5. Partículas      (efeitos visuais)
-          6. Jogador         (sempre visível acima)
-          7. Zona vermelha   (semi-transparente, cobre tudo)
-          8. HUD             (interface, acima de tudo)
-          9. Overlay de fim  (tela de resultado)
+        ORDEM DE RENDERIZAÇÃO (Algoritmo do Pintor — de trás para frente):
+          1. Labirinto (camada mais ao fundo)
+          2. Itens especiais
+          3. Inimigos
+          4. Projéteis
+          5. Partículas (efeitos visuais)
+          6. Jogador
+          7. Zona vermelha (semi-transparente, sobre tudo)
+          8. HUD (interface, sempre no topo)
+          9. Overlay de fim de jogo (se encerrado)
         """
-        if self.state == "start":
-            draw_start_screen(screen)
+        # Tela inicial: renderiza e sai imediatamente
+        if self.estado == "inicio":
+            desenhar_tela_inicial(tela)
             return
 
-        self.tilemap.draw(screen)
+        # Camadas do jogo (de trás para frente)
+        self.labirinto.desenhar(tela, portas=self.portas)
 
-        for item     in self.itens:     item.draw(screen)
-        for inimigo  in self.inimigos:  inimigo.draw(screen)
-        for projetil in self.projeteis: projetil.draw(screen)
-        for p        in self.particulas: p.draw(screen)
+        for item in self.itens:
+            item.desenhar(tela)
 
-        self.player.draw(screen)
-        self.zone.draw(screen)
+        for inimigo in self.inimigos:
+            inimigo.desenhar(tela)
 
-        if self.state == "playing":
-            self.hud.draw(screen, self)
+        for proj in self.projeteis:
+            proj.desenhar(tela)
 
-        if self.state == "end":
-            self._desenhar_tela_fim(screen)
+        for p in self.particulas:
+            p.desenhar(tela)
 
-    def _desenhar_tela_fim(self, screen):
-        """Monta e chama draw_end_screen com os dados da partida encerrada."""
-        kills = sum(1 for e in self.inimigos if not e.alive)
-        draw_end_screen(
-            screen,
-            self.hud.font_large, self.hud.font_medium, self.hud.font_small,
-            won           = self.venceu,
-            score         = self.pontuacao,
-            high_score    = self.recorde,
-            elapsed_secs  = self.elapsed_seconds,
-            kills         = kills,
-            total         = self.total_inimigos,
-            accuracy      = self.player.accuracy,
-            session_count = self.num_sessoes,
-        )
+        self.jogador.desenhar(tela)
 
-    '''
-    # 9. PROPRIEDADES DE COMPATIBILIDADE COM HUD
+        # Zona vermelha por cima de tudo (semi-transparente)
+        self.zona.desenhar(tela)
 
-    As propriedades abaixo garantem compatibilidade sem quebrar o HUD.
-    '''
+        # HUD sempre visível durante a partida
+        if self.estado == "jogando":
+            self.hud.desenhar(tela, self)
 
-    @property
-    def score(self):
-        return self.pontuacao
-
-    @property
-    def high_score(self):
-        return self.recorde
-
-    @property
-    def enemies(self):
-        return self.inimigos
-
-    @property
-    def bullets(self):
-        return self.projeteis
+        # Overlay de resultado ao encerrar
+        if self.estado == "fim":
+            eliminacoes = sum(1 for e in self.inimigos if not e.vivo)
+            desenhar_tela_fim(
+                tela,
+                self.hud.fonte_grande,
+                self.hud.fonte_media,
+                self.hud.fonte_pequena,
+                vitoria      = self.vitoria,
+                pontuacao    = self.pontuacao,
+                recorde      = self.recorde,
+                segundos     = self.segundos_decorridos,
+                eliminacoes  = eliminacoes,
+                total        = self.total_inimigos,
+                precisao     = self.jogador.precisao,
+                numero_sessao= self.numero_sessao,
+            )

@@ -1,311 +1,304 @@
 # =============================================================================
-# player.py (Jogador e Projéteis)
+# player.py: Módulo do Jogador e Projéteis
 # =============================================================================
 
 
 import pygame
 import math
 from config import (
-    PLAYER_SPEED, PLAYER_SIZE, PLAYER_SHOT_COOLDOWN,
-    PLAYER_SPEED_BOOST, PLAYER_SPAWN_COL, PLAYER_SPAWN_ROW,
-    BULLET_SPEED, BULLET_LIFE, BULLET_DECAY_RATE,
-    BULLET_RADIUS, DOUBLE_SHOT_OFFSET,
-    POWERUP_DURATION,
-    C_PLAYER, C_PLAYER_GUN, C_PLAYER_GLOW, C_PLAYER_CORE,
-    C_BULLET, C_BULLET_CORE, C_SHIELD_RING,
+    VELOCIDADE_JOGADOR, TAMANHO_JOGADOR,
+    COOLDOWN_DISPARO, VELOCIDADE_PROJETIL, VIDA_PROJETIL,
+    DURACAO_POWERUP, COR_JOGADOR, COR_JOGADOR_GUN
 )
-from tilemap import TileMap
+from tilemap import Labirinto
 
 
-class Player:
-    """
-    Personagem controlado pelo jogador.
+class Jogador:
+    def __init__(self, coluna_inicio, linha_inicio):
+        # Posição inicial do jogador
+        self.x, self.y = Labirinto.tile_para_pixel_centro(coluna_inicio, linha_inicio)
 
-    Estado interno:
-        x, y          → posição do centro (pixels)
-        angle         → ângulo de mira (radianos; 0 = direita)
-        alive         → False quando o jogo termina
-        powerups      → dicionário {tipo: ms_restantes}
-        total_shots   → total de projéteis disparados (para calcular precisão)
-        hits          → projéteis que acertaram inimigos
-    """
+        # Estado do jogador
+        self.angulo    = 0.0
+        self.vivo      = True
+        self.tamanho   = TAMANHO_JOGADOR
 
-    # Tipos de power-up válidos e seus valores iniciais
-    _POWERUP_DEFAULTS = {
-        "speed":  0,   # Velocidade 1.7× por POWERUP_DURATION ms
-        "double": 0,   # Dois projéteis por disparo
-        "shield": 0,   # Invulnerável a inimigos e zona vermelha
-        "freeze": 0,   # Paralisa todos os inimigos e a zona
-    }
+        # Controle de disparo
+        self.tempo_ultimo_disparo = 0
 
-    def __init__(self, start_col=PLAYER_SPAWN_COL, start_row=PLAYER_SPAWN_ROW):
-        self.x, self.y = TileMap.tile_to_pixel_center(start_col, start_row)
-        self.angle      = 0.0
-        self.alive      = True
-        self.size       = PLAYER_SIZE
+        # Timers dos power-ups
+        self.powerups = {"velocidade": 0, "duplo": 0, "escudo": 0, "congelar": 0}
 
-        self.last_shot_time = 0
-        self.powerups       = dict(self._POWERUP_DEFAULTS)   # cópia mutável
+        # Estatísticas
+        self.total_disparos = 0
+        self.acertos        = 0
 
-        # Estatísticas da partida
-        self.total_shots = 0
-        self.hits        = 0
-
-    '''
-    # 1. ATUALIZAÇÃO — chamado uma vez por frame
-    '''
-
-    def update(self, keys, mouse_pos, dt, projeteis):
+    def atualizar(self, teclas, pos_mouse, dt, projeteis, labirinto):
         """
-        Processa input, move o jogador, atualiza mira e dispara.
-
-        Args:
-            keys       : pygame.key.get_pressed()
-            mouse_pos  : (x, y) do cursor
-            dt         : delta time em ms
-            projeteis  : lista onde novos Bullet serão adicionados
+        Atualiza movimento, rotação, power-ups e disparos do jogador.
         """
-        if not self.alive:
+        if not self.vivo:
             return
 
-        self._tick_powerups(dt)
-        self._handle_movement(keys)
-        self._update_aim(mouse_pos)
-        self._handle_shooting(keys, projeteis)
+        # Atualiza duração dos power-ups
+        self._decrementar_powerups(dt)
 
-    def _tick_powerups(self, dt):
-        """Decrementa o tempo restante de cada power-up ativo."""
+        # Ajusta velocidade se houver boost
+        velocidade = VELOCIDADE_JOGADOR * (
+            1.7 if self.powerups["velocidade"] > 0 else 1.0
+        )
+
+        dx, dy = 0.0, 0.0
+
+        # Entrada de movimento
+        if teclas[pygame.K_LEFT]  or teclas[pygame.K_a]: dx -= 1
+        if teclas[pygame.K_RIGHT] or teclas[pygame.K_d]: dx += 1
+        if teclas[pygame.K_UP]    or teclas[pygame.K_w]: dy -= 1
+        if teclas[pygame.K_DOWN]  or teclas[pygame.K_s]: dy += 1
+
+        # Normaliza movimento diagonal
+        if dx != 0 and dy != 0:
+            dx /= math.sqrt(2)
+            dy /= math.sqrt(2)
+
+        # Move com colisão e deslize
+        self._mover_com_deslize(dx * velocidade, dy * velocidade, labirinto)
+
+        # Rotação em direção ao mouse
+        self.angulo = math.atan2(
+            pos_mouse[1] - self.y,
+            pos_mouse[0] - self.x
+        )
+
+        # Disparo
+        botoes = pygame.mouse.get_pressed()
+        if botoes[0] or teclas[pygame.K_SPACE]:
+            self._tentar_disparar(projeteis)
+
+    def _decrementar_powerups(self, dt):
+        """
+        Reduz o tempo restante dos power-ups ativos.
+        """
         for tipo in self.powerups:
             if self.powerups[tipo] > 0:
                 self.powerups[tipo] = max(0, self.powerups[tipo] - dt)
 
-    def _handle_movement(self, keys):
-        """Lê as teclas e move o jogador com wall-sliding."""
-        velocidade = PLAYER_SPEED * (PLAYER_SPEED_BOOST if self.powerups["speed"] > 0 else 1.0)
-
-        dx, dy = self._get_input_direction(keys)
-        if dx != 0 and dy != 0:
-            # Normaliza diagonal para evitar velocidade ~41% maior
-            fator = math.sqrt(2)
-            dx   /= fator
-            dy   /= fator
-
-        self._move_with_slide(dx * velocidade, dy * velocidade)
-
-    @staticmethod
-    def _get_input_direction(keys):
-        """Retorna o vetor de direção bruto (dx, dy) a partir das teclas."""
-        dx = (keys[pygame.K_RIGHT] or keys[pygame.K_d]) - (keys[pygame.K_LEFT] or keys[pygame.K_a])
-        dy = (keys[pygame.K_DOWN]  or keys[pygame.K_s]) - (keys[pygame.K_UP]   or keys[pygame.K_w])
-        return float(dx), float(dy)
-
-    def _move_with_slide(self, dx, dy):
+    def _mover_com_deslize(self, dx, dy, labirinto):
         """
-        Move o jogador aplicando wall-sliding nos dois eixos.
-
-        Tenta mover combinado primeiro. SE COLIDIR:
-          - Tenta apenas o eixo X (desliza verticalmente na parede)
-          - Tenta apenas o eixo Y (desliza horizontalmente na parede)
-        Isso evita que o jogador trave completamente ao encostar em cantos.
+        Move o jogador aplicando colisão e efeito de deslize.
         """
-        novo_x = self.x + dx
-        novo_y = self.y + dy
+        # Movimento completo
+        novo_x, novo_y = self.x + dx, self.y + dy
 
-        # Movimento combinado (caso ideal — sem colisão)
-        if not TileMap.circle_collides_wall(novo_x, novo_y, self.size):
+        if not labirinto.circulo_colide_parede(novo_x, novo_y, self.tamanho):
             self.x, self.y = novo_x, novo_y
             return
 
-        # Slide no eixo X
-        if not TileMap.circle_collides_wall(novo_x, self.y, self.size):
+        # Tenta mover apenas no eixo X
+        novo_x = self.x + dx
+        if not labirinto.circulo_colide_parede(novo_x, self.y, self.tamanho):
             self.x = novo_x
 
-        # Slide no eixo Y
-        if not TileMap.circle_collides_wall(self.x, novo_y, self.size):
+        # Tenta mover apenas no eixo Y
+        novo_y = self.y + dy
+        if not labirinto.circulo_colide_parede(self.x, novo_y, self.tamanho):
             self.y = novo_y
 
-    def _update_aim(self, mouse_pos):
+    def _tentar_disparar(self, projeteis):
         """
-        Atualiza o ângulo de mira em direção ao cursor do mouse.
-        # que é calculado com atan2 entre o jogador e o mouse, de forma que o jogador aponte sempre para o cursor.
-        """
-        self.angle = math.atan2(mouse_pos[1] - self.y, mouse_pos[0] - self.x)
-
-    def _handle_shooting(self, keys, projeteis):
-        """Dispara se o cooldown foi respeitado e o botão está pressionado."""
-        atirando = pygame.mouse.get_pressed()[0] or keys[pygame.K_SPACE]
-        if atirando:
-            self._try_shoot(projeteis)
-
-    def _try_shoot(self, projeteis):
-        """
-        Adiciona projéteis à lista se o cooldown foi respeitado.
-
-        Com power-up "double" ativo, dispara dois projéteis paralelos
-        separados perpendicularmente ao ângulo de mira.
+        Cria projéteis respeitando o cooldown de disparo.
         """
         agora = pygame.time.get_ticks()
-        if agora - self.last_shot_time < PLAYER_SHOT_COOLDOWN:
+
+        if agora - self.tempo_ultimo_disparo < COOLDOWN_DISPARO:
             return
 
-        self.last_shot_time = agora
-        self.total_shots   += 1
+        self.tempo_ultimo_disparo = agora
+        self.total_disparos += 1
 
-        if self.powerups["double"] > 0:
-            # Vetor perpendicular ao ângulo de mira para separar os projéteis
-            perp_x = -math.sin(self.angle) * DOUBLE_SHOT_OFFSET
-            perp_y =  math.cos(self.angle) * DOUBLE_SHOT_OFFSET
-            projeteis.append(Bullet(self.x + perp_x, self.y + perp_y, self.angle))
-            projeteis.append(Bullet(self.x - perp_x, self.y - perp_y, self.angle))
+        # Disparo duplo
+        if self.powerups["duplo"] > 0:
+            desl = 4
+
+            px = -math.sin(self.angulo) * desl
+            py =  math.cos(self.angulo) * desl
+
+            projeteis.append(
+                Projetil(self.x + px, self.y + py, self.angulo)
+            )
+            projeteis.append(
+                Projetil(self.x - px, self.y - py, self.angulo)
+            )
+
+        # Disparo simples
         else:
-            projeteis.append(Bullet(self.x, self.y, self.angle))
+            projeteis.append(
+                Projetil(self.x, self.y, self.angulo)
+            )
 
-    '''
-    # 2. POWER-UPS
-    '''
-
-    def activate_powerup(self, tipo):
+    def ativar_powerup(self, tipo):
         """
-        Ativa um power-up e define sua duração.
-
-        Se o jogador coletar o mesmo power-up enquanto ele já estiver ativo, o tempo de duração é reiniciado (não acumula)
+        Ativa ou renova power-up
         """
         if tipo in self.powerups:
-            self.powerups[tipo] = POWERUP_DURATION
+            self.powerups[tipo] = DURACAO_POWERUP
 
-    '''
-    # 3. PROPRIEDADES
-    '''
-
-    @property
-    def has_shield(self):
-        """True se o escudo está ativo (invulnerável)."""
-        return self.powerups["shield"] > 0
-
-    @property
-    def accuracy(self):
-        """Precisão de acerto em porcentagem. Retorna 0 se não atirou."""
-        if self.total_shots == 0:
-            return 0
-        return int(self.hits / self.total_shots * 100)
-
-    '''
-    # 4. RENDERIZAÇÃO
-    '''
-
-    def draw(self, screen):
+    def desenhar(self, tela):
         """
-        Renderiza o jogador como triângulo neon rotacionado para o mouse.
-        Se o escudo estiver ativo, exibe um anel ciano ao redor.
+        Desenha o jogador e seus efeitos visuais.
         """
-        if not self.alive:
+        if not self.vivo:
             return
 
-        self._draw_glow(screen)
+        tamanho = self.tamanho
 
-        if self.has_shield:
-            self._draw_shield_ring(screen)
+        # Efeito visual do escudo
+        if self.powerups["escudo"] > 0:
+            pygame.draw.circle(
+                tela,
+                (0, 150, 200),
+                (int(self.x), int(self.y)),
+                tamanho + 8,
+                2
+            )
 
-        self._draw_body(screen)
-
-    def _draw_glow(self, screen):
-        """Brilho ao redor do jogador."""
-        tamanho = self.size * 4
-        glow_surf = pygame.Surface((tamanho, tamanho), pygame.SRCALPHA)
-        pygame.draw.circle(
-            glow_surf,
-            (*C_PLAYER_GLOW, 40),
-            (tamanho // 2, tamanho // 2),
-            self.size * 2,
-        )
-        screen.blit(glow_surf, (int(self.x) - tamanho // 2, int(self.y) - tamanho // 2))
-
-    def _draw_shield_ring(self, screen):
-        """Anel de escudo ativo ao redor do jogador."""
-        pygame.draw.circle(
-            screen, C_SHIELD_RING,
-            (int(self.x), int(self.y)),
-            self.size + 8, 2,
-        )
-
-    def _draw_body(self, screen):
-        """Triângulo principal rotacionado para o ângulo de mira."""
-        s = self.size
-        # Pontos do triângulo no espaço local (origem = centro do jogador)
+        # Modelo triangular da nave
         pontos_locais = [
-            (0,        -s * 1.1),   # ponta frontal
-            (-s * 0.65, s * 0.75),  # traseira esquerda
-            ( s * 0.65, s * 0.75),  # traseira direita
+            (0, -tamanho * 1.1),
+            (-tamanho * 0.65, tamanho * 0.75),
+            (tamanho * 0.65, tamanho * 0.75),
         ]
 
-        # Rotaciona e translada cada ponto para o espaço da tela
-        ang  = self.angle + math.pi / 2
-        cos_a, sin_a = math.cos(ang), math.sin(ang)
+        # Rotaciona modelo
+        cos_a = math.cos(self.angulo + math.pi / 2)
+        sin_a = math.sin(self.angulo + math.pi / 2)
+
         pontos_mundo = [
-            (lx * cos_a - ly * sin_a + self.x,
-             lx * sin_a + ly * cos_a + self.y)
+            (
+                lx * cos_a - ly * sin_a + self.x,
+                lx * sin_a + ly * cos_a + self.y
+            )
             for lx, ly in pontos_locais
         ]
 
-        pygame.draw.polygon(screen, C_PLAYER_GUN, pontos_mundo)
-        pygame.draw.polygon(screen, C_PLAYER,     pontos_mundo, 0)
-        pygame.draw.polygon(screen, (180, 240, 255), pontos_mundo, 1)
+        # Brilho do jogador
+        glow = pygame.Surface(
+            (tamanho * 4, tamanho * 4),
+            pygame.SRCALPHA
+        )
 
-        # Ponto central de energia
-        pygame.draw.circle(screen, C_PLAYER_CORE, (int(self.x), int(self.y)), 2)
+        pygame.draw.circle(
+            glow,
+            (0, 212, 255, 40),
+            (tamanho * 2, tamanho * 2),
+            tamanho * 2
+        )
+
+        tela.blit(
+            glow,
+            (int(self.x) - tamanho * 2,
+             int(self.y) - tamanho * 2)
+        )
+
+        # Desenha jogador
+        pygame.draw.polygon(tela, COR_JOGADOR_GUN, pontos_mundo)
+        pygame.draw.polygon(tela, COR_JOGADOR, pontos_mundo)
+        pygame.draw.polygon(tela, (180, 240, 255), pontos_mundo, 1)
+
+        # Centro do jogador
+        pygame.draw.circle(
+            tela,
+            (200, 255, 255),
+            (int(self.x), int(self.y)),
+            2
+        )
+
+    @property
+    def tem_escudo(self):
+        # Indica se o escudo está ativo
+        return self.powerups["escudo"] > 0
+
+    @property
+    def precisao(self):
+        # Calcula taxa de acerto
+        if self.total_disparos == 0:
+            return 0
+
+        return int(
+            self.acertos /
+            self.total_disparos * 100
+        )
 
 
-'''
-# 5. Bullet (Projétil disparado pelo jogador)
-'''
+class Projetil:
+    def __init__(self, x, y, angulo):
+        """
+        Inicializa um projétil na posição e direção informadas.
+        """
+        # Posição inicial
+        self.x = x
+        self.y = y
 
-class Bullet:
-    """
-    Projétil que se move em linha reta com velocidade constante.
+        # Velocidade baseada no ângulo
+        self.vel_x = math.cos(angulo) * VELOCIDADE_PROJETIL
+        self.vel_y = math.sin(angulo) * VELOCIDADE_PROJETIL
 
-    Ciclo de vida:
-      - Criado por Player._try_shoot()
-      - Atualizado a cada frame por Bullet.update()
-      - Removido de projeteis quando alive == False
+        # Tempo de vida
+        self.vida = VIDA_PROJETIL
+        self.ativo = True
 
-    Motivos para alive = False:
-      1. Colidiu com uma parede
-      2. Vida chegou a zero (distância máxima percorrida)
-      3. Acertou um inimigo (marcado em GameState)
-    """
+    def atualizar(self):
+        # Atualiza posição
+        self.x += self.vel_x
+        self.y += self.vel_y
 
-    def __init__(self, x, y, angle):
-        self.x  = x
-        self.y  = y
-        # Decompõe o ângulo em velocidade vetorial (vx, vy)
-        self.vx = math.cos(angle) * BULLET_SPEED
-        self.vy = math.sin(angle) * BULLET_SPEED
-        self.life  = BULLET_LIFE
-        self.alive = True
+        # Consome vida
+        self.vida -= 0.02
 
-    def update(self):
-        """Avança o projétil e verifica expiração por parede ou vida."""
-        self.x    += self.vx
-        self.y    += self.vy
-        self.life -= BULLET_DECAY_RATE
+        # Colisão com parede
+        col, lin = Labirinto.pixel_para_tile(self.x, self.y)
 
-        coluna, linha = TileMap.pixel_to_tile(self.x, self.y)
-        if TileMap.is_wall(coluna, linha) or self.life <= 0:
-            self.alive = False
-
-    def draw(self, screen):
-        """Renderiza o projétil com brilho proporcional à vida restante."""
-        if not self.alive:
+        if Labirinto.e_parede(col, lin):
+            self.ativo = False
             return
 
-        alpha = int(self.life * 255)
-        cx, cy = int(self.x), int(self.y)
+        # Remove ao expirar
+        if self.vida <= 0:
+            self.ativo = False
 
-        # Halo externo semi-transparente
+    def desenhar(self, tela):
+        """
+        Desenha o projétil e seu efeito de brilho.
+        """
+        if not self.ativo:
+            return
+
+        # Intensidade do brilho
+        opacidade = int(self.vida * 255)
+
+        # Glow do projétil
         glow = pygame.Surface((14, 14), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*C_BULLET, alpha // 3), (7, 7), 7)
-        screen.blit(glow, (cx - 7, cy - 7))
 
-        # Núcleo sólido
-        pygame.draw.circle(screen, C_BULLET,      (cx, cy), BULLET_RADIUS)
-        pygame.draw.circle(screen, C_BULLET_CORE, (cx, cy), 1)
+        pygame.draw.circle(
+            glow,
+            (*COR_JOGADOR, opacidade // 3),
+            (7, 7),
+            7
+        )
+
+        tela.blit(glow, (int(self.x) - 7, int(self.y) - 7))
+
+        # Corpo do projétil
+        pygame.draw.circle(
+            tela,
+            COR_JOGADOR,
+            (int(self.x), int(self.y)),
+            3
+        )
+
+        pygame.draw.circle(
+            tela,
+            (200, 255, 255),
+            (int(self.x), int(self.y)),
+            1
+        )
