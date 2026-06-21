@@ -93,6 +93,7 @@ class EstadoJogo:
         self.total_inimigos = 0
         self.vitoria        = False
         self.ms_inicio      = 0     # Timestamp de início da partida
+        self.ms_fim         = 0     # Snapshot de ms_decorridos ao encerrar a partida
 
     
     # NOVA PARTIDA
@@ -161,6 +162,10 @@ class EstadoJogo:
     @property
     def segundos_decorridos(self):
         """Segundos desde o início da partida (como float)."""
+        # Quando a partida já terminou, o cronômetro fica parado no valor
+        # registrado em _finalizar(), em vez de continuar contando.
+        if self.estado == "fim":
+            return self.ms_fim / 1000.0
         return self.ms_decorridos / 1000.0
 
     
@@ -359,6 +364,7 @@ class EstadoJogo:
 
     def _finalizar(self):
         """Procedimentos comuns ao encerrar (vitória ou derrota)."""
+        self.ms_fim  = self.ms_decorridos  # Congela o cronômetro no tempo final
         salvar_recorde(self.pontuacao)
         self.recorde = carregar_recorde()
         self.combo   = 1
