@@ -6,10 +6,11 @@
 import pygame
 import math
 import sys
+import os
 from config import (
     LARGURA_TELA, ALTURA_TELA,
     COR_PRETO, COR_HUD_DESTAQUE, COR_HUD_FRACO,
-    COR_VITORIA, COR_DERROTA
+    COR_VITORIA, COR_DERROTA, SPRITE_MENU_BG, SPRITE_BTN_JOGAR, SPRITE_BTN_SAIR, SPRITE_TITULO
 )
 
 
@@ -31,32 +32,11 @@ class Botao:
         """
         self.rect       = pygame.Rect(x, y, largura, altura)
         self.texto      = texto
-        self.cor_normal = cor_normal
-        self.cor_hover  = cor_hover
         self.com_hover  = False   # True quando o mouse está sobre o botão
-        self.fonte      = pygame.font.SysFont("couriernew", 16, bold=True)
 
     def atualizar(self, pos_mouse):
         """Verifica se o mouse está sobre o botão (para efeito hover)."""
         self.com_hover = self.rect.collidepoint(pos_mouse)
-
-    def desenhar(self, tela):
-        """Renderiza o botão com visual diferente se hover estiver ativo."""
-        # Fundo escuro semi-transparente
-        fundo = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-        fundo.fill((10, 16, 32, 220))
-        tela.blit(fundo, (self.rect.x, self.rect.y))
-
-        # Borda: muda de cor quando o mouse está sobre o botão
-        cor_borda = self.cor_hover if self.com_hover else self.cor_normal
-        pygame.draw.rect(tela, cor_borda, self.rect, 2)
-
-        # Texto centralizado dentro do botão
-        cor_texto = self.cor_hover if self.com_hover else (180, 200, 240)
-        surf_texto = self.fonte.render(self.texto, True, cor_texto)
-        tx = self.rect.x + (self.rect.width  - surf_texto.get_width())  // 2
-        ty = self.rect.y + (self.rect.height - surf_texto.get_height()) // 2
-        tela.blit(surf_texto, (tx, ty))
 
     def foi_clicado(self, evento):
         """
@@ -91,43 +71,53 @@ def executar_menu(tela):
     """
     relogio = pygame.time.Clock()
 
+    #Carrega a tela do background
+    menu_bg = None
+    if os.path.exists(SPRITE_MENU_BG):
+        menu_bg = pygame.image.load(SPRITE_MENU_BG).convert()
+        menu_bg = pygame.transform.scale(menu_bg, (LARGURA_TELA, ALTURA_TELA))
     # Centro da tela
     cx = LARGURA_TELA // 2
     cy = ALTURA_TELA  // 2
 
+    #Botao JOGAR
+    btn_jogar_img = None
+    if os.path.exists(SPRITE_BTN_JOGAR):
+        btn_jogar_img = pygame.image.load(SPRITE_BTN_JOGAR).convert_alpha()
+
+    #Botao SAIR
+    btn_sair_img = None
+    if os.path.exists(SPRITE_BTN_SAIR):
+        btn_sair_img = pygame.image.load(SPRITE_BTN_SAIR).convert_alpha()
+
+    #Logo do Jogo
+    titulo_img = None
+    if os.path.exists(SPRITE_TITULO):
+        titulo_img = pygame.image.load(SPRITE_TITULO).convert_alpha()
+
+
     # Dimensões dos botões
     btn_l, btn_a = 220, 50
 
-    # Botão "Jogar": verde, posicionado ligeiramente abaixo do centro
+    # Botao JOGAR, desenhado se arquivo não existir
     btn_jogar = Botao(
         cx - btn_l // 2, cy + 20,
         btn_l, btn_a,
         "[ JOGAR ]",
-        (0, 150, 100),   # Borda verde normal
-        COR_VITORIA      # Borda verde brilhante ao hover
+        (0, 210, 140),   # Borda verde normal
+        (0, 255, 180)      # Borda verde brilhante ao hover
     )
 
-    # Botão "Sair" — vermelho, abaixo do botão jogar
+    # Botao SAIR, desenhado se arquivo não existir
     btn_sair = Botao(
         cx - btn_l // 2, cy + 90,
         btn_l, btn_a,
         "[ SAIR ]",
-        (120, 30, 30),   # Borda vermelha normal
-        COR_DERROTA      # Borda vermelha brilhante ao hover
+        (200, 40, 40),   # Borda vermelha normal
+        (255, 50, 50)    # Borda vermelha brilhante ao hover
     )
 
-    # Fontes para o menu
-    fonte_titulo = pygame.font.SysFont("couriernew", 40, bold=True)
-    fonte_sub    = pygame.font.SysFont("couriernew", 12)
-    fonte_info   = pygame.font.SysFont("couriernew", 10)
-
-    # Instruções de controle exibidas no menu
-    controles = [
-        "WASD / Setas — Mover     |     Mouse — Mirar",
-        "Clique Esquerdo / Espaço — Atirar",
-        "Elimine TODOS os impostores antes da zona vermelha fechar!",
-    ]
-
+    #loop
     rodando = True
     while rodando:
         pos_mouse = pygame.mouse.get_pos()
@@ -152,41 +142,39 @@ def executar_menu(tela):
         btn_jogar.atualizar(pos_mouse)
         btn_sair.atualizar(pos_mouse)
 
-        # Renderização 
-        tela.fill(COR_PRETO)
+        # Renderização , se não achar arquivo do bg, utiliza bg antigo desenhado (pontos)
+        if menu_bg:
+            tela.blit(menu_bg, (0, 0))
+        else:
+            tela.fill(COR_PRETO)
+            _desenhar_grade_fundo(tela)
 
-        # Grade decorativa de fundo 
-        _desenhar_grade_fundo(tela)
+        
 
-        # Título com brilho pulsante
-        pulso       = abs(math.sin(pygame.time.get_ticks() * 0.0015))
-        cor_titulo  = tuple(int(c * (0.7 + 0.3 * pulso)) for c in COR_HUD_DESTAQUE)
-        surf_t1     = fonte_titulo.render("LABIRINTO DOS", True, cor_titulo)
-        surf_t2     = fonte_titulo.render("IMPOSTORES",    True, cor_titulo)
-        tela.blit(surf_t1, (cx - surf_t1.get_width() // 2, cy - 160))
-        tela.blit(surf_t2, (cx - surf_t2.get_width() // 2, cy - 110))
+        # Título
+        if titulo_img:
+            tela.blit(titulo_img, (cx - titulo_img.get_width() // 2, cy - 220))
+        #JOGAR
+        if btn_jogar_img:
+            tela.blit(btn_jogar_img, (cx - btn_jogar_img.get_width() // 2, cy + 20))
+        #SAIR
+        if btn_sair_img:
+            tela.blit(btn_sair_img, (cx - btn_sair_img.get_width() // 2, cy + 90))
 
-        # Subtítulo
-        sub = fonte_sub.render("MISSÃO CLASSIFICADA · AGENTE DESIGNADO", True, COR_HUD_FRACO)
-        tela.blit(sub, (cx - sub.get_width() // 2, cy - 55))
+        #Highlight JOGAR
+        if btn_jogar_img:
+            img = btn_jogar_img.copy()
+            if btn_jogar.com_hover:
+                img.fill((60, 60, 60), special_flags=pygame.BLEND_RGB_ADD)
+            tela.blit(img, (cx - img.get_width() // 2, cy + 20))
 
-        # Linha divisória decorativa
-        pygame.draw.line(tela, COR_HUD_DESTAQUE,
-                         (cx - 200, cy - 30), (cx + 200, cy - 30), 1)
-
-        # Botões
-        btn_jogar.desenhar(tela)
-        btn_sair.desenhar(tela)
-
-        # Instruções de controle
-        for i, linha in enumerate(controles):
-            surf = fonte_info.render(linha, True, COR_HUD_FRACO)
-            tela.blit(surf, (cx - surf.get_width() // 2, cy + 162 + i * 16))
-
-        # Rodapé com dica de teclado
-        dica = fonte_info.render("[ ENTER ] para jogar  |  [ ESC ] para sair",
-                                 True, (40, 60, 90))
-        tela.blit(dica, (cx - dica.get_width() // 2, ALTURA_TELA - 24))
+        #Highlight SAIR
+        if btn_sair_img:
+            img = btn_sair_img.copy()
+            if btn_sair.com_hover:
+                img.fill((60, 60, 60), special_flags=pygame.BLEND_RGB_ADD)
+            tela.blit(img, (cx - img.get_width() // 2, cy + 90))
+        
 
         pygame.display.flip()
         relogio.tick(60)

@@ -3,10 +3,11 @@
 # =============================================================================
 
 import pygame
+import os
 import math
 import random
 from config import (
-    TAMANHO_INIMIGO, COR_INIMIGO, COR_NUCLEO_INIMIGO, COR_BRILHO_INIMIGO
+    TAMANHO_INIMIGO, COR_INIMIGO, COR_NUCLEO_INIMIGO, COR_BRILHO_INIMIGO, PASTA_ENEMY, ENEMY_IDLE_FRAMES, ENEMY_WALK_FRAMES
 )
 from tilemap import Labirinto
 
@@ -30,7 +31,7 @@ class Inimigo:
         vivo   → False quando eliminado por projétil ou zona
     """
 
-    def __init__(self, coluna, linha, velocidade):
+    def __init__(self, coluna, linha, velocidade,alcance = 150, agressividade = 0.1):
         """
         Inicializa o inimigo no centro do tile especificado.
 
@@ -38,11 +39,15 @@ class Inimigo:
             coluna     (int)  : coluna de spawn no mapa
             linha      (int)  : linha de spawn no mapa
             velocidade (float): velocidade em pixels por frame
+            alcance (int) : distancia em pixel que um inimigo enxerga 
+            agressividade (float) : chance de pursue ao inves de vagar
         """
         self.x, self.y = Labirinto.tile_para_pixel_centro(coluna, linha)
         self.vel       = velocidade
         self.tamanho   = TAMANHO_INIMIGO
         self.vivo      = True
+        self.alcance       = alcance
+        self.agressividade = agressividade
 
         '''
         # Direção atual representada como vetor unitário (magnitude = 1)
@@ -51,6 +56,27 @@ class Inimigo:
         angulo_inicial = random.uniform(0, 2 * math.pi)
         self.dir_x = math.cos(angulo_inicial)
         self.dir_y = math.sin(angulo_inicial)
+
+        #variaveis de frame ; nao implementado 
+        self.frame_atual   = 0
+        self.timer_frame   = 0
+        self.frame_duracao_idle = 400  # ms per frame
+        self.frame_duracao_walk = 150
+        self.em_movimento = True
+
+
+        self.frames_idle = []
+        for i in range(ENEMY_IDLE_FRAMES):
+            path = os.path.join(PASTA_ENEMY, f"enemy_idle_{i}.png")
+            if os.path.exists(path):
+                self.frames.append(pygame.image.load(path).convert_alpha())
+
+        self.frames_walk = []
+        for i in range(ENEMY_WALK_FRAMES):
+            path = os.path.join(PASTA_ENEMY,f"enemy_walk_{i}.png")
+            if os.path.exists(path):
+                self.frames_walk.append(pygame.image.load(path).convert_alpha())
+
 
         # Contadores de movimentação aleatória
         self.tempo_desde_mudanca = 0    # ms desde a última mudança de direção
@@ -93,14 +119,15 @@ class Inimigo:
         # Animação de flutuação (continua mesmo congelado)
         self.timer_flutuacao += dt * 0.003
 
-        # Se congelado: não move, mas continua existindo
-        if congelado:
-            return
+        # Cheque se estar congelado/frame
+        self.em_movimento = not congelado
+
 
         # Decrementar timers do tempo interno de movimentação aleatória dos impostores
         self.tempo_desde_mudanca += dt
         if self.cooldown_colisao > 0:
             self.cooldown_colisao -= dt
+
 
         # Mudança espontânea de direção a cada ~800ms (35% de chance)
         if self.tempo_desde_mudanca >= INTERVALO_MUDANCA_DIRECAO:
@@ -120,6 +147,20 @@ class Inimigo:
         # Verifica morte pela zona vermelha
         if self._esta_na_zona(margem_zona):
             self.vivo = False
+
+        #Frame LOOP
+        self.timer_frame += dt
+        frames_ativos = self.frames_walk if self.em_movimento else self.frames_idle
+        frame_duracao = self.frame_duracao_walk if self.em_movimento else self.frame_duracao_idle
+        if frames_ativos:
+            if self.timer_frame >= frame_duracao:
+                self.timer_frame = 0
+                self.frame_atual = (self.frame_atual + 1) % len(frames_ativos)
+
+         # Se congelado: não move, mas continua existindo
+        if congelado:
+            return
+        
 
     def _tentar_mover(self, labirinto):
         """
@@ -260,47 +301,58 @@ class Inimigo:
         """Marca o inimigo como morto (atingido por projétil)."""
         self.vivo = False
 
+
     # RENDERIZAÇÃO
     def desenhar(self, tela):
         """
+        Sprites do Inimigo. 
+        Se não achar arquivo,
         Renderiza o inimigo como estrela de 8 pontas com brilho neon.
         Flutua suavemente com animação senoidal.
         """
+        #Inimigo morreu, desaparece
         if not self.vivo:
             return
-
-        # Efeito de flutuação vertical (movimento senoidal suave)
+        #Var para estrela
         flutuacao_y = math.sin(self.timer_flutuacao + self.offset_flutuacao) * 2.0
         cx = int(self.x)
         cy = int(self.y + flutuacao_y)
 
-        #   Brilho externo (glow ao redor do inimigo) 
-        raio_glow = self.tamanho + 6
-        surf_glow = pygame.Surface((raio_glow * 2, raio_glow * 2), pygame.SRCALPHA)
-        pygame.draw.circle(surf_glow, (*COR_BRILHO_INIMIGO, 50),
-                           (raio_glow, raio_glow), raio_glow)
-        tela.blit(surf_glow, (cx - raio_glow, cy - raio_glow))
+        #Desenhando os frames
 
-        # Estrela de 8 pontas (Alterna entre raio externo (pontas) e raio interno (vales))
-        raio_ext    = self.tamanho
-        raio_int    = int(self.tamanho * 0.5)
-        num_pontas  = 8
-        pontos_estrela = []
-        for i in range(num_pontas * 2):
-            angulo = (i * math.pi / num_pontas) - math.pi / 2
-            raio   = raio_ext if i % 2 == 0 else raio_int
-            pontos_estrela.append((
-                cx + math.cos(angulo) * raio,
-                cy + math.sin(angulo) * raio
-            ))
+        frames_ativos = self.frames_walk if self.em_movimento else self.frames_idle
+        if frames_ativos:
 
-        pygame.draw.polygon(tela, self.cor, pontos_estrela)
-        pygame.draw.polygon(tela, COR_BRILHO_INIMIGO, pontos_estrela, 1)
+            frame_idx = self.frame_atual % len(frames_ativos)
+            frame     = frames_ativos[frame_idx]
+            rect      = frame.get_rect(center=(cx, cy))
+            tela.blit(frame, rect)
+        else:
+            #Se não achar, recai na estrela original
+            raio_ext       = self.tamanho
+            raio_int       = int(self.tamanho * 0.5)
+            num_pontas     = 8
+            pontos_estrela = []
+            for i in range(num_pontas * 2):
+                angulo = (i * math.pi / num_pontas) - math.pi / 2
+                raio   = raio_ext if i % 2 == 0 else raio_int
+                pontos_estrela.append((
+                    cx + math.cos(angulo) * raio,
+                    cy + math.sin(angulo) * raio
+                ))
 
-        # Núcleo central (olho que aponta na direção de movimento)
-        pygame.draw.circle(tela, COR_NUCLEO_INIMIGO, (cx, cy), 3)
-        pygame.draw.circle(
-            tela, (80, 0, 0),
-            (cx + int(self.dir_x * 2), cy + int(self.dir_y * 2)),
-            1
-        )
+            raio_glow = self.tamanho + 6
+            surf_glow = pygame.Surface((raio_glow * 2, raio_glow * 2), pygame.SRCALPHA)
+            pygame.draw.circle(surf_glow, (*COR_BRILHO_INIMIGO, 50),
+                               (raio_glow, raio_glow), raio_glow)
+            tela.blit(surf_glow, (cx - raio_glow, cy - raio_glow))
+
+            pygame.draw.polygon(tela, self.cor, pontos_estrela)
+            pygame.draw.polygon(tela, COR_BRILHO_INIMIGO, pontos_estrela, 1)
+
+            pygame.draw.circle(tela, COR_NUCLEO_INIMIGO, (cx, cy), 3)
+            pygame.draw.circle(
+                tela, (80, 0, 0),
+                (cx + int(self.dir_x * 2), cy + int(self.dir_y * 2)),
+                1
+            )

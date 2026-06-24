@@ -4,12 +4,15 @@
 
 
 import pygame
+import os
 import math
+import audio
 from config import (
     VELOCIDADE_JOGADOR, TAMANHO_JOGADOR,
     COOLDOWN_DISPARO, VELOCIDADE_PROJETIL, VIDA_PROJETIL,
-    DURACAO_POWERUP, COR_JOGADOR, COR_JOGADOR_GUN
+    DURACAO_POWERUP, COR_JOGADOR, COR_JOGADOR_GUN, PASTA_PLAYER, PLAYER_IDLE_FRAMES, PLAYER_WALK_FRAMES
 )
+
 from tilemap import Labirinto
 
 
@@ -33,6 +36,30 @@ class Jogador:
         self.total_disparos = 0
         self.acertos        = 0
 
+        #Frame logic
+        self.frame_atual   = 0
+        self.timer_frame   = 0
+        self.frame_duracao_idle = 300  # ms per idle frame (slower)
+        self.frame_duracao_walk = 120  # ms per walk frame (faster)
+        self.em_movimento  = False
+
+        self.frames_idle = []
+        for i in range(PLAYER_IDLE_FRAMES):
+            path = os.path.join(PASTA_PLAYER, f"player_idle_{i}.png")
+            if os.path.exists(path):
+                self.frames_idle.append(pygame.image.load(path).convert_alpha())
+
+        self.frames_walk = []
+        for i in range(PLAYER_WALK_FRAMES):
+            path = os.path.join(PASTA_PLAYER, f"player_walk_{i}.png")
+            if os.path.exists(path):
+                self.frames_walk.append(pygame.image.load(path).convert_alpha())
+
+      
+  
+
+
+
     def atualizar(self, teclas, pos_mouse, dt, projeteis, labirinto):
         """
         Atualiza movimento, rotação, power-ups e disparos do jogador.
@@ -51,7 +78,7 @@ class Jogador:
         dx, dy = 0.0, 0.0
 
         # Entrada de movimento
-        if teclas[pygame.K_LEFT]  or teclas[pygame.K_a]: dx -= 1
+        if teclas[pygame.K_LEFT]  or teclas[pygame.K_a]: dx -= 1 
         if teclas[pygame.K_RIGHT] or teclas[pygame.K_d]: dx += 1
         if teclas[pygame.K_UP]    or teclas[pygame.K_w]: dy -= 1
         if teclas[pygame.K_DOWN]  or teclas[pygame.K_s]: dy += 1
@@ -69,6 +96,21 @@ class Jogador:
             pos_mouse[1] - self.y,
             pos_mouse[0] - self.x
         )
+        
+        
+        self.em_movimento = (dx != 0 or dy != 0)
+
+        frames_ativos   = self.frames_walk if self.em_movimento else self.frames_idle
+        frame_duracao   = self.frame_duracao_walk if self.em_movimento else self.frame_duracao_idle
+        if frames_ativos:
+            self.timer_frame += dt
+            if self.timer_frame >= frame_duracao:
+                self.timer_frame  = 0
+                self.frame_atual  = (self.frame_atual + 1) % len(frames_ativos)
+
+
+
+
 
         # Disparo
         botoes = pygame.mouse.get_pressed()
@@ -116,6 +158,12 @@ class Jogador:
         self.tempo_ultimo_disparo = agora
         self.total_disparos += 1
 
+        #Logica do som do tiro
+
+        if audio.sons.get("tiro"):
+            audio.sons["tiro"].set_volume(0.3)
+            audio.sons["tiro"].play()
+
         # Disparo duplo
         if self.powerups["duplo"] > 0:
             desl = 4
@@ -161,49 +209,33 @@ class Jogador:
                 tamanho + 8,
                 2
             )
+        frames_ativos = self.frames_walk if self.em_movimento else self.frames_idle
+        if frames_ativos:
+        # trancar o frame
+            frame_idx = self.frame_atual % len(frames_ativos)
+            frame     = frames_ativos[frame_idx]
+            rect      = frame.get_rect(center=(int(self.x), int(self.y)))
+            tela.blit(frame, rect)
+        else:
+            #Se nao encontrar sprites, usa a nave.
+            cos_a = math.cos(self.angulo + math.pi / 2)
+            sin_a = math.sin(self.angulo + math.pi / 2)
+            pontos_locais = [
+                (0, -tamanho * 1.1),
+                (-tamanho * 0.65, tamanho * 0.75),
+                (tamanho * 0.65, tamanho * 0.75),
+            ]
+            pontos_mundo = [
+                (lx * cos_a - ly * sin_a + self.x,
+                 lx * sin_a + ly * cos_a + self.y)
+                for lx, ly in pontos_locais
+            ]
+            pygame.draw.polygon(tela, COR_JOGADOR_GUN, pontos_mundo)
+            pygame.draw.polygon(tela, COR_JOGADOR, pontos_mundo)
+            pygame.draw.polygon(tela, (180, 240, 255), pontos_mundo, 1)
 
-        # Modelo triangular da nave
-        pontos_locais = [
-            (0, -tamanho * 1.1),
-            (-tamanho * 0.65, tamanho * 0.75),
-            (tamanho * 0.65, tamanho * 0.75),
-        ]
+        pygame.draw.circle(tela, (200, 255, 255), (int(self.x), int(self.y)), 2)
 
-        # Rotaciona modelo
-        cos_a = math.cos(self.angulo + math.pi / 2)
-        sin_a = math.sin(self.angulo + math.pi / 2)
-
-        pontos_mundo = [
-            (
-                lx * cos_a - ly * sin_a + self.x,
-                lx * sin_a + ly * cos_a + self.y
-            )
-            for lx, ly in pontos_locais
-        ]
-
-        # Brilho do jogador
-        glow = pygame.Surface(
-            (tamanho * 4, tamanho * 4),
-            pygame.SRCALPHA
-        )
-
-        pygame.draw.circle(
-            glow,
-            (0, 212, 255, 40),
-            (tamanho * 2, tamanho * 2),
-            tamanho * 2
-        )
-
-        tela.blit(
-            glow,
-            (int(self.x) - tamanho * 2,
-             int(self.y) - tamanho * 2)
-        )
-
-        # Desenha jogador
-        pygame.draw.polygon(tela, COR_JOGADOR_GUN, pontos_mundo)
-        pygame.draw.polygon(tela, COR_JOGADOR, pontos_mundo)
-        pygame.draw.polygon(tela, (180, 240, 255), pontos_mundo, 1)
 
         # Centro do jogador
         pygame.draw.circle(

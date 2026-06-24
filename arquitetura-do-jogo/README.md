@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎮 Labirinto dos Impostores
+# 🎮 ZERK
 
 ### Jogo 2D de ação e sobrevivência desenvolvido com Python e Pygame-ce
 
@@ -8,7 +8,7 @@
   <img src="screenshots/gameplay.gif" width="900">
 </p>
 
-Sobreviva em um labirinto hostil enquanto enfrenta inimigos cada vez mais agressivos, coleta power-ups estratégicos e escapa da expansão implacável da Zona Vermelha.
+Sobreviva em um labirinto hostil enquanto enfrenta inimigos cada vez mais agressivos, coleta power-ups estratégicos enquanto escapa da da Zona Vermelha.
 
 Desenvolvido com foco em arquitetura modular, programação orientada a objetos, gerenciamento de estados, lógica de comportamento dos NPCs e sistemas de gameplay escaláveis.
 
@@ -94,16 +94,8 @@ O projeto foi estruturado seguindo princípios de modularização, separação d
 
 # 🎮 Sobre o Jogo
 
-O objetivo é eliminar todos os impostores antes que eles ou a Zona Vermelha eliminem você.
+O objetivo é eliminar todos os inimigos antes que eles ou a Zona Vermelha elimine você.
 
-Durante a partida:
-
-- Encostar em um impostor resulta em derrota.
-- A Zona Vermelha é letal.
-- As paredes bloqueiam o movimento.
-- O nível de dificuldade aumenta continuamente.
-
----
 
 # 🎯 Mecânicas de Jogo
 

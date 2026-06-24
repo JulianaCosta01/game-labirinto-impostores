@@ -10,9 +10,12 @@ import json
 import os
 from config import (
     POSICOES_INIMIGOS, POSICOES_ITENS,
-    VELOCIDADE_INIMIGO_BASE, VELOCIDADE_INIMIGO_PASSO, VELOCIDADE_INIMIGO_MAX,
+    VELOCIDADE_INIMIGO_BASE, VELOCIDADE_INIMIGO_PASSO, VELOCIDADE_INIMIGO_MAX, INIMIGO_ALCANCE_BASE, INIMIGO_ALCANCE_PASSO, INIMIGO_ALCANCE_MAX,
+    INIMIGO_AGRESSIVIDADE_BASE, INIMIGO_AGRESSIVIDADE_PASSO, INIMIGO_AGRESSIVIDADE_MAX,
+
     PONTOS_POR_KILL, JANELA_COMBO_MS,
     COR_INIMIGO, COR_BRILHO_INIMIGO,
+    
     LARGURA_TELA, ALTURA_TELA
 )
 from tilemap       import Labirinto
@@ -64,7 +67,7 @@ class EstadoJogo:
     def __init__(self):
         self.numero_sessao = 0                    # Conta quantas partidas foram jogadas
         self.recorde       = carregar_recorde()   # Melhor pontuação já registrada
-        self.estado        = "inicio"             # Estado inicial: tela de espera
+        self.estado        = "inicio"            # Estado inicial: tela de espera
 
         # Subsistemas do jogo (criados/recriados a cada nova partida)
         self.labirinto  = Labirinto()   # Mapa fixo — criado uma vez só
@@ -82,10 +85,9 @@ class EstadoJogo:
         # LAYOUT_MAPA ('D' nas posições linha=8,col=10 e linha=11,col=9).
         '''
         self.portas = [
-            PortaAutomatica(coluna=10, linha=8,  orientacao="vertical"),
-            PortaAutomatica(coluna=9,  linha=11, orientacao="horizontal"),
-        ]
-
+    PortaAutomatica(coluna=8,  linha=8,  orientacao="vertical"),
+    PortaAutomatica(coluna=9,  linha=11, orientacao="horizontal"),
+]
         # Dados da partida atual
         self.pontuacao      = 0
         self.combo          = 1
@@ -114,6 +116,12 @@ class EstadoJogo:
             VELOCIDADE_INIMIGO_MAX
         )
 
+        alcance = min(
+            INIMIGO_ALCANCE_BASE + (self.numero_sessao -1 ) * INIMIGO_ALCANCE_PASSO, INIMIGO_ALCANCE_MAX
+        )
+
+
+
         # Reinicia dados da partida
         self.pontuacao      = 0
         self.combo          = 1
@@ -125,7 +133,7 @@ class EstadoJogo:
 
         # Cria todos os inimigos nas posições definidas em config.py
         self.inimigos = [
-            Inimigo(coluna=c, linha=l, velocidade=vel_inimigos)
+            Inimigo(coluna=c, linha=l, velocidade=vel_inimigos, alcance = alcance)
             for (l, c) in POSICOES_INIMIGOS
         ]
         self.total_inimigos = len(self.inimigos)

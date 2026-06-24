@@ -1,35 +1,33 @@
 
 import sys
 import pygame
+import audio
 
 from config import LARGURA_TELA, ALTURA_TELA, FPS, TITULO, PASTA_SONS, PASTA_MUSICAS
 from menu          import executar_menu
 from game_state   import EstadoJogo
 import os
 
-
 def carregar_audio():
     '''
     Carrega todos os recursos de áudio do jogo.
     '''
     sons = {}
-
     # Música de fundo
     caminho_musica = os.path.join(PASTA_MUSICAS, "musica_fundo.ogg")
     if os.path.exists(caminho_musica):
         pygame.mixer.music.load(caminho_musica)
-        pygame.mixer.music.set_volume(0.4)   # Volume moderado
-        pygame.mixer.music.play(loops=-1)    # Loop infinito
-    # else: sem música — jogo continua normalmente
-
+        pygame.mixer.music.set_volume(0.4)
+        pygame.mixer.music.play(loops=-1)
+           
     # Efeitos sonoros 
     nomes_sons = {
-        "tiro":        "tiro.wav",
+        "tiro":        "tiro.wav",  
         "explosao":    "explosao.wav",
-        "coleta":      "coleta.wav",
-        "zona_alerta": "zona_alerta.wav",
+        "coleta":      "coleta.wav", 
+        "zona_alerta": "zona_alerta.wav", 
         "vitoria":     "vitoria.wav",
-        "derrota":     "derrota.wav",
+        "derrota":     "derrota.wav", 
     }
 
     for chave, arquivo in nomes_sons.items():
@@ -45,8 +43,7 @@ def carregar_audio():
 
     return sons
 
-
-def executar_jogo(tela, sons):
+def executar_jogo(tela):
     """
     Executa o loop principal do jogo.
 
@@ -63,6 +60,13 @@ def executar_jogo(tela, sons):
     relogio    = pygame.time.Clock()
     estado     = EstadoJogo()
     zona_ativa = False   # Controla quando tocar o alerta de zona
+    fim_processado = False
+    estado_anterior = "inicio"
+
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.play(loops=-1)
+
+    
 
     rodando = True
     while rodando:
@@ -76,7 +80,6 @@ def executar_jogo(tela, sons):
                 # ESC na tela inicial → volta ao menu
                 if evento.key == pygame.K_ESCAPE and estado.estado == "inicio":
                     return True
-
 
         teclas    = pygame.key.get_pressed()
         pos_mouse = pygame.mouse.get_pos()
@@ -93,20 +96,32 @@ def executar_jogo(tela, sons):
         # Atualizar toda a lógica do jogo
         estado.atualizar(dt, teclas, pos_mouse, eventos)
 
+        if estado_anterior == "fim" and estado.estado == "jogando":
+            fim_processado = False
+            zona_ativa     = False
+            if not pygame.mixer.music.get_busy():
+                pygame.mixer.music.play(loops=-1)
+
+        estado_anterior = estado.estado
+
       
         # Áudio dinâmico baseado no estado do jogo
         if estado.estado == "jogando" and estado.zona.ativa:
             if not zona_ativa:
                 zona_ativa = True
                 # Toca alerta quando a zona ativa pela primeira vez
-                if sons.get("zona_alerta"):
-                    sons["zona_alerta"].play()
+                if audio.sons.get("zona_alerta"):
+                    audio.sons["zona_alerta"].play()
+        if estado.estado == "fim" and not fim_processado:
+            fim_processado = True
+            pygame.mixer.music.stop()
 
-        if estado.estado == "fim":
-            if estado.vitoria and sons.get("vitoria"):
-                sons["vitoria"].play()
-            elif not estado.vitoria and sons.get("derrota"):
-                sons["derrota"].play()
+            
+            if estado.vitoria and audio.sons.get("vitoria"):
+                    audio.sons["vitoria"].play()
+            elif not estado.vitoria and audio.sons.get("derrota"):
+                    audio.sons["derrota"].play()
+                
             zona_ativa = False   # Reseta para a próxima partida
 
 
@@ -127,6 +142,7 @@ def main():
 
     # Inicializa o sistema de som separadamente
     pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    pygame.mixer.set_num_channels(16)
 
     # Configura o título da janela
     pygame.display.set_caption(TITULO)
@@ -137,7 +153,7 @@ def main():
     )
 
     # Carrega todos os recursos de áudio
-    sons = carregar_audio()
+    audio.sons = carregar_audio()
 
     while True:
         deve_jogar = executar_menu(tela)
@@ -145,19 +161,14 @@ def main():
         if not deve_jogar:
             break   
 
-        # Para a música do menu e inicia a do jogo (se tiver)
-        pygame.mixer.music.stop()
-        caminho_jogo = os.path.join(PASTA_MUSICAS, "musica_jogo.ogg")
-        if os.path.exists(caminho_jogo):
-            pygame.mixer.music.load(caminho_jogo)
-            pygame.mixer.music.play(loops=-1)
-
         # Executa o jogo
-        deve_continuar = executar_jogo(tela, sons)
+        deve_continuar = executar_jogo(tela)
+        if not pygame.mixer.music.get_busy():
+            pygame.mixer.music.play(loops=-1)
 
         if not deve_continuar:
             break   
-
+        
 
     pygame.quit()
     sys.exit()

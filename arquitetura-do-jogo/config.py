@@ -9,15 +9,27 @@ PASTA_ASSETS = os.path.join(PASTA_BASE, "assets")
 
 # Subpastas de assets 
 PASTA_IMAGENS = os.path.join(PASTA_ASSETS, "images")
-PASTA_SONS    = os.path.join(PASTA_ASSETS, "sounds")
+PASTA_SONS    = os.path.join(PASTA_ASSETS, "audio")
 PASTA_MUSICAS = os.path.join(PASTA_ASSETS, "music")
+PASTA_PLAYER = os.path.join(PASTA_IMAGENS, "player")
+PASTA_ENEMY  = os.path.join(PASTA_IMAGENS, "enemy")
+PASTA_MENU   = os.path.join(PASTA_IMAGENS, "menu")
+PASTA_MENU     = os.path.join(PASTA_IMAGENS, "menu")
+SPRITE_MENU_BG = os.path.join(PASTA_MENU, "menu_bg.jpg")
+SPRITE_CONTROLS = os.path.join(PASTA_MENU, "controls.png")
+SPRITE_BTN_JOGAR = os.path.join(PASTA_MENU, "btn_jogar.png")
+SPRITE_BTN_SAIR = os.path.join(PASTA_MENU, "btn_sair.png")
+SPRITE_TITULO = os.path.join(PASTA_MENU, "zerk_title.png")
+
+SPRITE_MENU_BG = os.path.join(PASTA_MENU, "menu_bg.jpg")
 
 
 # CONFIGURAÇÕES DA JANELA DO JOGO
 LARGURA_TELA = 800        
 ALTURA_TELA  = 600        
 FPS          = 60        
-TITULO       = "Labirinto dos Impostores" 
+TITULO       = "ZERK"
+
 
 
 TAMANHO_TILE = 32   # Tamanho de cada célula do labirinto em pixels
@@ -37,11 +49,14 @@ LAYOUT_MAPA = [
     "#.#....#.D...TT......#..#", 
     "#.#.##.#.##.......####..#",  
     "#........#Q......#...#..#", 
-    "#..GGGGG.#######D#.#....#",  
+    "#..GGGGG.#########.#....#",  
     "##.GpppG.#...#.#.#.###..#",  
     "#..#ppp#...#.....#......#",
     "#########################",
 ]
+#debug - Cheque se mapa eh valido
+#for i, linha in enumerate(LAYOUT_MAPA):
+    #print(f"Linha {i}: {len(linha)} chars")
 
 # Dimensões 
 LINHAS_MAPA  = len(LAYOUT_MAPA)
@@ -56,17 +71,31 @@ TAMANHO_JOGADOR        = 9     # Raio de colisão do jogador em pixels
 COOLDOWN_DISPARO       = 280   # Tempo mínimo entre disparos (ms)
 VELOCIDADE_PROJETIL    = 7.0   
 VIDA_PROJETIL          = 1.0   # Vida do projétil (decai 0.02 por frame → ~50 frames)
+#Sprites (nao implementado)
+PLAYER_IDLE_FRAMES = 0
+PLAYER_WALK_FRAMES = 0
 
 
-# CONFIGURAÇÕES DOS IMPOSTORES (INIMIGOS)
+# CONFIGURAÇÕES DOS INIMIGOS
 VELOCIDADE_INIMIGO_BASE = 2.0   # Velocidade inicial dos inimigos
 VELOCIDADE_INIMIGO_PASSO = 0.3  # Aumento de velocidade a cada nova partida
 VELOCIDADE_INIMIGO_MAX   = 5.0  # Velocidade máxima permitida
 TAMANHO_INIMIGO          = 9    # Raio de colisão do inimigo em pixels
+#Sprites (nao implementado)
+ENEMY_IDLE_FRAMES = 0
+ENEMY_WALK_FRAMES = 0
+#Alcance
+INIMIGO_ALCANCE_BASE        = 150
+INIMIGO_ALCANCE_PASSO       = 25
+INIMIGO_ALCANCE_MAX         = 400
+#Agressividade
+INIMIGO_AGRESSIVIDADE_BASE  = 0.1
+INIMIGO_AGRESSIVIDADE_PASSO = 0.1
+INIMIGO_AGRESSIVIDADE_MAX   = 0.9
 
 # Posições iniciais dos impostores no mapa [linha, coluna]
 POSICOES_INIMIGOS = [
-    (1, 18), (1, 12), (1,  4),
+    (1, 18), (1, 12), (3,  4),
     (3, 22), (3, 10),
     (5,  5), (5, 18),
     (7, 12), (7, 22),
@@ -76,7 +105,6 @@ POSICOES_INIMIGOS = [
     (15,14), (15, 2),
     (15,18), (16, 9),
 ]
-
 # Posições dos itens especiais [linha, coluna, tipo]
 POSICOES_ITENS = [
     (3,  6, "velocidade"),
@@ -115,7 +143,7 @@ COR_JOGADOR      = (  0, 212, 255)   # Ciano brilhante — corpo do jogador
 COR_JOGADOR_GUN  = (  0, 160, 200)   # Azul mais escuro — detalhe frontal
 COR_PROJETIL     = (  0, 255, 200)   # Verde-ciano — projéteis disparados
 
-# Cores dos impostores
+# Cores dos inimigos
 COR_INIMIGO      = (255,  34,  68)   # Vermelho neon — corpo do inimigo
 COR_NUCLEO_INIMIGO = (255, 180, 180)   # Rosa claro — núcleo central (olho)
 COR_BRILHO_INIMIGO = (200,  0,  30)  # Vermelho escuro — brilho ao redor
@@ -194,8 +222,6 @@ COR_BRILHO_PISCINA = (80, 255, 140)   # Cor do brilho pulsante sobre a piscina
 COR_DEMARCACAO_PISO = (90, 80, 50)   
 
 DEMARCACOES_PISO = [
-    (22, 2, 2, 5),    # GRUPO 1 — Painéis+Servidores: painel_alerta|painel_pequeno + gap + servidor (L2-6, cols 22-23)
-    (22, 10, 2, 2),   # GRUPO 2 — Equipamentos: estante_quimica (L10-11, cols 22-23)
-    (22, 13, 2, 3),   # GRUPO 3 — Armazenamento: armario (L13-15, cols 22-23)
+    (7, 1, 2, 6),   # Servidores
+    (7, 17, 2, 2),  # Estantes químicas
 ]
-

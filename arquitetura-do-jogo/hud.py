@@ -5,14 +5,14 @@
 
 import pygame
 import math
+import os
 from config import (
     LARGURA_TELA, ALTURA_TELA, LARGURA_MAPA, ALTURA_MAPA,
     COR_HUD_BG, COR_HUD_TEXTO, COR_HUD_FRACO, COR_HUD_DESTAQUE,
     COR_COMBO, COR_INIMIGO, COR_JOGADOR, COR_ZONA_BORDA,
-    COR_VITORIA, COR_DERROTA, COR_BRANCO, COR_PRETO,
+    COR_VITORIA, COR_DERROTA, COR_BRANCO, COR_PRETO, 
     DURACAO_POWERUP
 )
-
 
 class HUD:
     """
@@ -24,18 +24,14 @@ class HUD:
 
     def __init__(self):
         # Fontes monoespaçadas 
-        self.fonte_grande  = pygame.font.SysFont("couriernew", 20, bold=True)
-        self.fonte_media   = pygame.font.SysFont("couriernew", 14, bold=True)
-        self.fonte_pequena = pygame.font.SysFont("couriernew", 11)
-        self.fonte_minima  = pygame.font.SysFont("couriernew",  9)
+        self.fonte_grande  = pygame.font.SysFont("couriernew", 28, bold=True)
+        self.fonte_media   = pygame.font.SysFont("couriernew", 20, bold=True)
+        self.fonte_pequena = pygame.font.SysFont("couriernew", 15)
+        self.fonte_minima  = pygame.font.SysFont("couriernew",  12)
 
         # Altura da barra superior do HUD
         self.altura_barra = 44
 
-        # Radar no canto inferior direito
-        self.tamanho_radar = 90
-        self.radar_x = LARGURA_TELA - self.tamanho_radar - 8
-        self.radar_y = ALTURA_TELA  - self.tamanho_radar - 8
 
     def desenhar(self, tela, estado_jogo):
         """
@@ -46,7 +42,6 @@ class HUD:
             estado_jogo: objeto EstadoJogo com todos os dados da partida
         """
         self._desenhar_barra_superior(tela, estado_jogo)
-        self._desenhar_radar(tela, estado_jogo)
         self._desenhar_powerups(tela, estado_jogo)
         if estado_jogo.zona.ativa:
             self._desenhar_aviso_zona(tela, estado_jogo)
@@ -98,7 +93,7 @@ class HUD:
         self._rotulo(tela, "COMBO", posicoes[4], 4)
         cor_combo  = COR_COMBO if ej.combo > 1 else COR_HUD_FRACO
         tam_fonte  = 20 if ej.combo > 3 else 16
-        fonte_cmb  = pygame.font.SysFont("couriernew", tam_fonte, bold=True)
+        fonte_cmb  = pygame.font.SysFont("ocrextended", tam_fonte, bold=True)
         surf_combo = fonte_cmb.render(f"x{ej.combo}", True, cor_combo)
         tela.blit(surf_combo, (posicoes[4], 16))
 
@@ -236,49 +231,32 @@ class HUD:
 
 
 
-# TELA INICIAL: exibida antes de começar a partida
+_controls_img = None
+_menu_bg       = None
+#TELA ANTES DA PARTIDA
+#Renderiza controls.png e aguarda ENTER.
 def desenhar_tela_inicial(tela):
-    """
-    Renderiza a tela de espera antes do primeiro jogo.
-    Exibe o título, instruções básicas e aguarda ENTER.
-    """
-    tela.fill(COR_PRETO)
+    global _controls_img, _menu_bg
 
-    fonte_titulo = pygame.font.SysFont("couriernew", 36, bold=True)
-    fonte_sub    = pygame.font.SysFont("couriernew", 12)
-    fonte_ctrl   = pygame.font.SysFont("couriernew", 11)
+    # Carregar controls.png uma vez
+    if _controls_img is None:
+        from config import SPRITE_CONTROLS
+        if os.path.exists(SPRITE_CONTROLS):
+            _controls_img = pygame.image.load(SPRITE_CONTROLS).convert()
+            _controls_img = pygame.transform.scale(_controls_img, (LARGURA_TELA, ALTURA_TELA))
 
-    # Título centralizado
-    titulo = fonte_titulo.render("LABIRINTO DOS IMPOSTORES", True, COR_HUD_DESTAQUE)
-    tela.blit(titulo, ((LARGURA_TELA - titulo.get_width()) // 2, ALTURA_TELA // 2 - 80))
+    # quickhaxs = control.png eh um background
+    if _controls_img:
+        tela.blit(_controls_img, (0, 0))
+    else:
+        tela.fill(COR_PRETO)
 
-    # Subtítulo
-    sub = fonte_sub.render("MISSÃO CLASSIFICADA · AGENTE DESIGNADO", True, COR_HUD_FRACO)
-    tela.blit(sub, ((LARGURA_TELA - sub.get_width()) // 2, ALTURA_TELA // 2 - 36))
-
-    # Linha divisória
-    pygame.draw.line(tela, COR_HUD_DESTAQUE,
-                     (LARGURA_TELA // 2 - 180, ALTURA_TELA // 2 - 16),
-                     (LARGURA_TELA // 2 + 180, ALTURA_TELA // 2 - 16), 1)
-
-    # Controles
-    controles = [
-        "WASD / Setas  →  Mover",
-        "Mouse         →  Mirar",
-        "Clique / Espaço  →  Atirar",
-        "Elimine TODOS os impostores antes da zona vermelha fechar!",
-    ]
-    for i, linha in enumerate(controles):
-        surf = fonte_ctrl.render(linha, True, COR_HUD_FRACO)
-        tela.blit(surf, ((LARGURA_TELA - surf.get_width()) // 2,
-                         ALTURA_TELA // 2 + i * 18))
-
-    # Instrução pulsante — chama atenção do jogador
-    pulso       = abs(math.sin(pygame.time.get_ticks() * 0.002))
-    cor_inicio  = tuple(int(c + (255 - c) * pulso) for c in COR_HUD_DESTAQUE)
-    inicio      = fonte_sub.render("[ ENTER ] para iniciar", True, cor_inicio)
-    tela.blit(inicio, ((LARGURA_TELA - inicio.get_width()) // 2,
-                       ALTURA_TELA // 2 + 100))
+    # IMPUT ENTER
+    fonte_sub  = pygame.font.SysFont("ocraextended", 16)
+    pulso      = abs(math.sin(pygame.time.get_ticks() * 0.002))
+    cor_inicio = tuple(int(c + (255 - c) * pulso) for c in COR_HUD_DESTAQUE)
+    inicio     = fonte_sub.render("[ ENTER ] para iniciar", True, cor_inicio)
+    tela.blit(inicio, ((LARGURA_TELA - inicio.get_width()) // 2, ALTURA_TELA - 100))
 
 
 
@@ -320,16 +298,16 @@ def desenhar_tela_fim(tela, fonte_grande, fonte_media, fonte_pequena,
     pygame.draw.rect(tela, cor_acento, (painel_x, painel_y, painel_l, painel_a), 2)
 
     # Título do resultado
-    fonte_titulo  = pygame.font.SysFont("couriernew", 28, bold=True)
-    texto_titulo  = "MISSÃO COMPLETA" if vitoria else "MISSÃO FALHOU"
+    fonte_titulo  = pygame.font.SysFont("ocrextended", 28, bold=True)
+    texto_titulo  = "VOCÊ VENCEU!" if vitoria else "VOCÊ PERDEU!"
     surf_titulo   = fonte_titulo.render(texto_titulo, True, cor_acento)
     tela.blit(surf_titulo,
               (painel_x + (painel_l - surf_titulo.get_width()) // 2, painel_y + 20))
 
     # Subtítulo descritivo
-    fonte_sub   = pygame.font.SysFont("couriernew", 11)
-    texto_sub   = "Todos os impostores eliminados." if vitoria else "O agente foi comprometido."
-    surf_sub    = fonte_sub.render(texto_sub, True, COR_HUD_FRACO)
+    fonte_sub   = pygame.font.SysFont("ocrextended", 20)
+    texto_sub   = "Todos os robôs foram eliminados!" if vitoria else "VOCÊ foi eliminado!"
+    surf_sub    = fonte_sub.render(texto_sub, True, (255, 255, 255))
     tela.blit(surf_sub,
               (painel_x + (painel_l - surf_sub.get_width()) // 2, painel_y + 56))
 
@@ -350,8 +328,8 @@ def desenhar_tela_fim(tela, fonte_grande, fonte_media, fonte_pequena,
         ("SESSÃO Nº",    str(numero_sessao)),
     ]
 
-    fonte_valor  = pygame.font.SysFont("couriernew", 13, bold=True)
-    fonte_rotulo = pygame.font.SysFont("couriernew", 11)
+    fonte_valor  = pygame.font.SysFont("ocrextended", 13, bold=True)
+    fonte_rotulo = pygame.font.SysFont("ocrextended", 11)
     inicio_y     = painel_y + 88
 
     for i, (rotulo, valor) in enumerate(estatisticas):
@@ -372,8 +350,8 @@ def desenhar_tela_fim(tela, fonte_grande, fonte_media, fonte_pequena,
             pygame.draw.circle(tela, (30, 50, 80), (dot_x, linha_y + 7), 1)
 
     # Instrução para continuar
-    fonte_inst = pygame.font.SysFont("couriernew", 12, bold=True)
-    surf_inst  = fonte_inst.render("[ENTER] Nova Missão   [ESC] Menu", True, COR_HUD_FRACO)
+    fonte_inst = pygame.font.SysFont("ocrextended", 12, bold=True)
+    surf_inst  = fonte_inst.render("[ENTER] Jogar Novamente", True, COR_HUD_FRACO)
     tela.blit(surf_inst,
               (painel_x + (painel_l - surf_inst.get_width()) // 2,
                painel_y + painel_a - 28))
